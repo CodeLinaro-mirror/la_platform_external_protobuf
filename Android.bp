@@ -224,6 +224,24 @@ cc_library {
     },
 }
 
+// C++ full library for vendor
+// =======================================================
+cc_library {
+    name: "libprotobuf-cpp-full-vendor",
+    defaults: ["libprotobuf-cpp-full-defaults"],
+    vendor: true,
+    target: {
+        android: {
+            static: {
+                enabled: false,
+            },
+        },
+        windows: {
+            enabled: true,
+        },
+    },
+}
+
 // Compiler library for the host
 // =======================================================
 cc_library {
