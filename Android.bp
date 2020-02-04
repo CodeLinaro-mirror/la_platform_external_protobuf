@@ -240,6 +240,20 @@ cc_library_shared {
     },
 }
 
+// C++ full library for the vendor
+// =======================================================
+cc_library_shared {
+    name: "libprotobuf-cpp-full-vendor",
+    defaults: ["libprotobuf-cpp-full-defaults"],
+    vendor: true,
+    cflags: ["-DGOOGLE_PROTOBUF_NO_RTTI"],
+    target: {
+        android: {
+            shared_libs: ["liblog"],
+        },
+    },
+}
+
 // C++ full library + rtti for the platform and host
 // =======================================================
 cc_library_shared {
