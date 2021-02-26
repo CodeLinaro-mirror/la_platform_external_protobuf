@@ -230,24 +230,10 @@ cc_library {
             enabled: true,
         },
     },
-}
-
-// C++ full library for vendor
-// =======================================================
-cc_library {
-    name: "libprotobuf-cpp-full-vendor",
-    defaults: ["libprotobuf-cpp-full-defaults"],
-    vendor: true,
-    target: {
-        android: {
-            static: {
-                enabled: false,
-            },
-        },
-        windows: {
-            enabled: true,
-        },
-    },
+    apex_available: [
+        "//apex_available:platform",
+        "com.android.virt",
+    ],
 }
 
 // Compiler library for the host
