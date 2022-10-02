@@ -47,17 +47,6 @@ license {
     ],
 }
 
-// This filegroup causes the BUILD.bazel in this folder to be appended
-// to the bp2build generated version of this Android.bp file.
-// This is used to import a manual conversion of libprotobuf-python.
-filegroup {
-    name: "external-protobuf-placeholder-to-import-BUILD.bazel",
-    srcs: [],
-    bazel_module: {
-        label: "//external/protobuf:external-protobuf-placeholder-to-import-BUILD.bazel",
-    },
-}
-
 cc_defaults {
     name: "protobuf-cflags-defaults",
 
@@ -282,7 +271,7 @@ cc_library {
     },
     apex_available: [
         "//apex_available:platform",
-        "com.android.bluetooth",
+        "com.android.btservices",
         "com.android.appsearch",
         "com.android.virt",
     ],
@@ -505,7 +494,7 @@ java_library_static {
 
     apex_available: [
         "//apex_available:platform",
-        "com.android.bluetooth",
+        "com.android.btservices",
     ],
 }
 
@@ -663,7 +652,7 @@ java_library_host {
     ],
     static_libs: [
         "error_prone_annotations",
-        "gson-prebuilt-jar",
+        "gson",
         "guava-21.0",
         "libprotobuf-java-full",
     ],
