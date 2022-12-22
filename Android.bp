@@ -38,24 +38,13 @@ license {
     license_kinds: [
         "SPDX-license-identifier-Apache-2.0",
         "SPDX-license-identifier-BSD",
-        "SPDX-license-identifier-GPL-2.0",
+        "SPDX-license-identifier-GPL-2.0-with-classpath-exception",
         "SPDX-license-identifier-MIT",
         "legacy_unencumbered",
     ],
     license_text: [
         "LICENSE",
     ],
-}
-
-// This filegroup causes the BUILD.bazel in this folder to be appended
-// to the bp2build generated version of this Android.bp file.
-// This is used to import a manual conversion of libprotobuf-python.
-filegroup {
-    name: "external-protobuf-placeholder-to-import-BUILD.bazel",
-    srcs: [],
-    bazel_module: {
-        label: "//external/protobuf:external-protobuf-placeholder-to-import-BUILD.bazel",
-    },
 }
 
 cc_defaults {
@@ -282,7 +271,7 @@ cc_library {
     },
     apex_available: [
         "//apex_available:platform",
-        "com.android.bluetooth",
+        "com.android.btservices",
         "com.android.appsearch",
         "com.android.virt",
     ],
@@ -451,7 +440,10 @@ cc_test {
 java_defaults {
     name: "libprotobuf_errorprone_defaults",
     errorprone: {
-        javacflags: ["-Xep:MissingOverride:OFF"], // b/73499927
+        javacflags: [
+            "-Xep:MissingOverride:OFF", // b/73499927
+            "-Xep:IgnoredPureGetter:WARN",
+        ],
     },
 }
 
@@ -483,15 +475,6 @@ java_library_static {
     ],
 }
 
-// Java nano library (compatibility for old host-side users)
-// =======================================================
-java_library_host {
-    name: "host-libprotobuf-java-nano",
-    static_libs: ["libprotobuf-java-nano"],
-
-    java_version: "1.7",
-}
-
 // Java micro library
 // =======================================================
 java_library_static {
@@ -505,15 +488,8 @@ java_library_static {
 
     apex_available: [
         "//apex_available:platform",
-        "com.android.bluetooth",
+        "com.android.btservices",
     ],
-}
-
-// Java micro library (compatibility for old host-side users)
-// =======================================================
-java_library_host {
-    name: "host-libprotobuf-java-micro",
-    static_libs: ["libprotobuf-java-micro"],
 }
 
 // Java lite library
@@ -522,6 +498,7 @@ java_library_static {
     name: "libprotobuf-java-lite",
     host_supported: true,
     sdk_version: "core_current",
+    defaults: ["libprotobuf_errorprone_defaults"],
 
     srcs: [
         "java/core/src/main/java/com/google/protobuf/AbstractMessageLite.java",
@@ -663,7 +640,7 @@ java_library_host {
     ],
     static_libs: [
         "error_prone_annotations",
-        "gson-prebuilt-jar",
+        "gson",
         "guava-21.0",
         "libprotobuf-java-full",
     ],
@@ -693,14 +670,6 @@ python_library {
         ":libprotobuf-internal-python-srcs",
         ":libprotobuf-internal-protos",
     ],
-    version: {
-        py2: {
-            enabled: true,
-        },
-        py3: {
-            enabled: true,
-        },
-    },
     libs: [
         "py-six",
     ],
