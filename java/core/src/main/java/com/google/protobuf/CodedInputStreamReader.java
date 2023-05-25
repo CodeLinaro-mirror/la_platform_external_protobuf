@@ -44,7 +44,6 @@ import java.util.List;
 import java.util.Map;
 
 /** An adapter between the {@link Reader} interface and {@link CodedInputStream}. */
-@CheckReturnValue
 @ExperimentalApi
 final class CodedInputStreamReader implements Reader {
   private static final int FIXED32_MULTIPLE_MASK = FIXED32_SIZE - 1;
@@ -166,6 +165,7 @@ final class CodedInputStreamReader implements Reader {
     return input.readStringRequireUtf8();
   }
 
+  @SuppressWarnings("unchecked")
   @Override
   public <T> T readMessage(Class<T> clazz, ExtensionRegistryLite extensionRegistry)
       throws IOException {
@@ -181,7 +181,7 @@ final class CodedInputStreamReader implements Reader {
     return readMessage(schema, extensionRegistry);
   }
 
-  @Deprecated
+  @SuppressWarnings("unchecked")
   @Override
   public <T> T readGroup(Class<T> clazz, ExtensionRegistryLite extensionRegistry)
       throws IOException {
@@ -189,7 +189,7 @@ final class CodedInputStreamReader implements Reader {
     return readGroup(Protobuf.getInstance().schemaFor(clazz), extensionRegistry);
   }
 
-  @Deprecated
+  @SuppressWarnings("unchecked")
   @Override
   public <T> T readGroupBySchemaWithCheck(Schema<T> schema, ExtensionRegistryLite extensionRegistry)
       throws IOException {
@@ -197,15 +197,9 @@ final class CodedInputStreamReader implements Reader {
     return readGroup(schema, extensionRegistry);
   }
 
-  @Override
-  public <T> void mergeMessageField(
-      T target, Schema<T> schema, ExtensionRegistryLite extensionRegistry) throws IOException {
-    requireWireType(WIRETYPE_LENGTH_DELIMITED);
-    mergeMessageFieldInternal(target, schema, extensionRegistry);
-  }
-
-  private <T> void mergeMessageFieldInternal(
-      T target, Schema<T> schema, ExtensionRegistryLite extensionRegistry) throws IOException {
+  // Should have the same semantics of CodedInputStream#readMessage()
+  private <T> T readMessage(Schema<T> schema, ExtensionRegistryLite extensionRegistry)
+      throws IOException {
     int size = input.readUInt32();
     if (input.recursionDepth >= input.recursionLimit) {
       throw InvalidProtocolBufferException.recursionLimitExceeded();
@@ -213,52 +207,37 @@ final class CodedInputStreamReader implements Reader {
 
     // Push the new limit.
     final int prevLimit = input.pushLimit(size);
+    // Allocate and read the message.
+    T message = schema.newInstance();
     ++input.recursionDepth;
-    schema.mergeFrom(target, this, extensionRegistry);
+    schema.mergeFrom(message, this, extensionRegistry);
+    schema.makeImmutable(message);
     input.checkLastTagWas(0);
     --input.recursionDepth;
     // Restore the previous limit.
     input.popLimit(prevLimit);
-  }
-
-  // Should have the same semantics of CodedInputStream#readMessage()
-  private <T> T readMessage(Schema<T> schema, ExtensionRegistryLite extensionRegistry)
-      throws IOException {
-    T newInstance = schema.newInstance();
-    mergeMessageFieldInternal(newInstance, schema, extensionRegistry);
-    schema.makeImmutable(newInstance);
-    return newInstance;
-  }
-
-  @Override
-  public <T> void mergeGroupField(
-      T target, Schema<T> schema, ExtensionRegistryLite extensionRegistry) throws IOException {
-    requireWireType(WIRETYPE_START_GROUP);
-    mergeGroupFieldInternal(target, schema, extensionRegistry);
-  }
-
-  private <T> void mergeGroupFieldInternal(
-      T target, Schema<T> schema, ExtensionRegistryLite extensionRegistry) throws IOException {
-    int prevEndGroupTag = endGroupTag;
-    endGroupTag = WireFormat.makeTag(WireFormat.getTagFieldNumber(tag), WIRETYPE_END_GROUP);
-
-    try {
-      schema.mergeFrom(target, this, extensionRegistry);
-      if (tag != endGroupTag) {
-        throw InvalidProtocolBufferException.parseFailure();
-      }
-    } finally {
-      // Restore the old end group tag.
-      endGroupTag = prevEndGroupTag;
-    }
+    return message;
   }
 
   private <T> T readGroup(Schema<T> schema, ExtensionRegistryLite extensionRegistry)
       throws IOException {
-    T newInstance = schema.newInstance();
-    mergeGroupFieldInternal(newInstance, schema, extensionRegistry);
-    schema.makeImmutable(newInstance);
-    return newInstance;
+    int prevEndGroupTag = endGroupTag;
+    endGroupTag = WireFormat.makeTag(WireFormat.getTagFieldNumber(tag), WIRETYPE_END_GROUP);
+
+    try {
+      // Allocate and read the message.
+      T message = schema.newInstance();
+      schema.mergeFrom(message, this, extensionRegistry);
+      schema.makeImmutable(message);
+
+      if (tag != endGroupTag) {
+        throw InvalidProtocolBufferException.parseFailure();
+      }
+      return message;
+    } finally {
+      // Restore the old end group tag.
+      endGroupTag = prevEndGroupTag;
+    }
   }
 
   @Override
@@ -842,7 +821,6 @@ final class CodedInputStreamReader implements Reader {
     }
   }
 
-  @Deprecated
   @Override
   public <T> void readGroupList(
       List<T> target, Class<T> targetType, ExtensionRegistryLite extensionRegistry)
@@ -851,7 +829,6 @@ final class CodedInputStreamReader implements Reader {
     readGroupList(target, schema, extensionRegistry);
   }
 
-  @Deprecated
   @Override
   public <T> void readGroupList(
       List<T> target, Schema<T> schema, ExtensionRegistryLite extensionRegistry)
@@ -1337,7 +1314,7 @@ final class CodedInputStreamReader implements Reader {
       case UINT64:
         return readUInt64();
       default:
-        throw new IllegalArgumentException("unsupported field type.");
+        throw new RuntimeException("unsupported field type.");
     }
   }
 

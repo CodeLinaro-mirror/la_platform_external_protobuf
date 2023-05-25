@@ -26,6 +26,10 @@ languages = [
       "python",
       "src/google/protobuf/compiler/python",
   ]),
+  Language("JavaScript", [
+      "js",
+      "src/google/protobuf/compiler/js",
+  ]),
   Language("PHP", [
       "php",
       "src/google/protobuf/compiler/php",

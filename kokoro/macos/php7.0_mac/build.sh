@@ -8,5 +8,4 @@ cd $(dirname $0)/../../..
 # Prepare worker environment to run tests
 source kokoro/macos/prepare_build_macos_rc
 
-# TODO(mkruskal) Re-enable this once we can get a working PHP 7.0 installed.
-#./tests.sh php7.0_mac
+./tests.sh php7.0_mac

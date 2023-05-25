@@ -32,7 +32,6 @@ package com.google.protobuf;
 
 import java.io.IOException;
 
-@CheckReturnValue
 class UnknownFieldSetLiteSchema
     extends UnknownFieldSchema<UnknownFieldSetLite, UnknownFieldSetLite> {
 
@@ -123,14 +122,10 @@ class UnknownFieldSetLiteSchema
   }
 
   @Override
-  UnknownFieldSetLite merge(UnknownFieldSetLite target, UnknownFieldSetLite source) {
-    if (UnknownFieldSetLite.getDefaultInstance().equals(source)) {
-      return target;
-    }
-    if (UnknownFieldSetLite.getDefaultInstance().equals(target)) {
-      return UnknownFieldSetLite.mutableCopyOf(target, source);
-    }
-    return target.mergeFrom(source);
+  UnknownFieldSetLite merge(UnknownFieldSetLite message, UnknownFieldSetLite other) {
+    return other.equals(UnknownFieldSetLite.getDefaultInstance())
+        ? message
+        : UnknownFieldSetLite.mutableCopyOf(message, other);
   }
 
   @Override

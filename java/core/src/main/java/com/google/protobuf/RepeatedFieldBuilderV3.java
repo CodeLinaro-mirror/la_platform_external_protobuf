@@ -37,7 +37,6 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
-import java.util.RandomAccess;
 
 /**
  * {@code RepeatedFieldBuilderV3} implements a structure that a protocol message uses to hold a
@@ -347,8 +346,9 @@ public class RepeatedFieldBuilderV3<
     // If we can inspect the size, we can more efficiently add messages.
     int size = -1;
     if (values instanceof Collection) {
-      final Collection<?> collection = (Collection<?>) values;
-      if (collection.isEmpty()) {
+      @SuppressWarnings("unchecked")
+      final Collection<MType> collection = (Collection<MType>) values;
+      if (collection.size() == 0) {
         return this;
       }
       size = collection.size();
@@ -408,7 +408,8 @@ public class RepeatedFieldBuilderV3<
 
   /**
    * Removes the element at the specified position in this list. Shifts any subsequent elements to
-   * the left (subtracts one from their indices).
+   * the left (subtracts one from their indices). Returns the element that was removed from the
+   * list.
    *
    * @param index the index at which to remove the message
    */
@@ -573,7 +574,7 @@ public class RepeatedFieldBuilderV3<
           MType extends AbstractMessage,
           BType extends AbstractMessage.Builder,
           IType extends MessageOrBuilder>
-      extends AbstractList<MType> implements List<MType>, RandomAccess {
+      extends AbstractList<MType> implements List<MType> {
 
     RepeatedFieldBuilderV3<MType, BType, IType> builder;
 
@@ -607,7 +608,7 @@ public class RepeatedFieldBuilderV3<
           MType extends AbstractMessage,
           BType extends AbstractMessage.Builder,
           IType extends MessageOrBuilder>
-      extends AbstractList<BType> implements List<BType>, RandomAccess {
+      extends AbstractList<BType> implements List<BType> {
 
     RepeatedFieldBuilderV3<MType, BType, IType> builder;
 
@@ -641,7 +642,7 @@ public class RepeatedFieldBuilderV3<
           MType extends AbstractMessage,
           BType extends AbstractMessage.Builder,
           IType extends MessageOrBuilder>
-      extends AbstractList<IType> implements List<IType>, RandomAccess {
+      extends AbstractList<IType> implements List<IType> {
 
     RepeatedFieldBuilderV3<MType, BType, IType> builder;
 

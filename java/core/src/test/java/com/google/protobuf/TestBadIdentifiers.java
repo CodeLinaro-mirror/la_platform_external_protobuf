@@ -43,13 +43,10 @@ public class TestBadIdentifiers extends TestCase {
 
   public void testCompilation() {
     // If this compiles, it means the generation was correct.
-    TestBadIdentifiersProto.Deprecated unused1 =
-        TestBadIdentifiersProto.Deprecated.newBuilder().build();
-    TestBadIdentifiersProto.Override unused2 =
-        TestBadIdentifiersProto.Override.getDefaultInstance();
+    TestBadIdentifiersProto.Deprecated.newBuilder();
+    TestBadIdentifiersProto.Override.newBuilder();
   }
 
-  @SuppressWarnings("IgnoredPureGetter") // TODO(b/221602772): Fix this
   public void testGetDescriptor() {
     TestBadIdentifiersProto.getDescriptor();
     TestBadIdentifiersProto.Descriptor.getDefaultInstance().getDescriptor();

@@ -30,12 +30,10 @@
 
 package com.google.protobuf;
 
-@CheckReturnValue
 final class NewInstanceSchemaLite implements NewInstanceSchema {
   @Override
   public Object newInstance(Object defaultInstance) {
-    // TODO(b/248560713) decide if we're keeping support for Full in schema classes and handle this
-    // better.
-    return ((GeneratedMessageLite<?, ?>) defaultInstance).newMutableInstance();
+    return ((GeneratedMessageLite) defaultInstance)
+        .dynamicMethod(GeneratedMessageLite.MethodToInvoke.NEW_MUTABLE_INSTANCE);
   }
 }

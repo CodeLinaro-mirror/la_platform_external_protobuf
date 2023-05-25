@@ -85,7 +85,6 @@ final class ExtensionSchemaFull extends ExtensionSchema<FieldDescriptor> {
 
   @Override
   <UT, UB> UB parseExtension(
-      Object containerMessage,
       Reader reader,
       Object extensionObject,
       ExtensionRegistryLite extensionRegistry,
@@ -203,7 +202,7 @@ final class ExtensionSchemaFull extends ExtensionSchema<FieldDescriptor> {
               } else {
                 unknownFields =
                     SchemaUtil.storeUnknownEnum(
-                        containerMessage, fieldNumber, number, unknownFields, unknownFieldSchema);
+                        fieldNumber, number, unknownFields, unknownFieldSchema);
               }
             }
             value = enumList;
@@ -222,7 +221,7 @@ final class ExtensionSchemaFull extends ExtensionSchema<FieldDescriptor> {
         Object enumValue = extension.descriptor.getEnumType().findValueByNumber(number);
         if (enumValue == null) {
           return SchemaUtil.storeUnknownEnum(
-              containerMessage, fieldNumber, number, unknownFields, unknownFieldSchema);
+              fieldNumber, number, unknownFields, unknownFieldSchema);
         }
         value = enumValue;
       } else {
@@ -498,7 +497,7 @@ final class ExtensionSchemaFull extends ExtensionSchema<FieldDescriptor> {
   Object findExtensionByNumber(
       ExtensionRegistryLite extensionRegistry, MessageLite defaultInstance, int number) {
     return ((ExtensionRegistry) extensionRegistry)
-        .findImmutableExtensionByNumber(((Message) defaultInstance).getDescriptorForType(), number);
+        .findExtensionByNumber(((Message) defaultInstance).getDescriptorForType(), number);
   }
 
   @Override
