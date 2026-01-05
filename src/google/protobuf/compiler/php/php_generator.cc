@@ -106,8 +106,7 @@ std::string DescriptorFullName(const DescriptorType* desc, bool is_internal) {
 std::string ConstantNamePrefix(absl::string_view classname) {
   bool is_reserved = false;
 
-  std::string lower(classname);
-  std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
+  std::string lower = absl::AsciiStrToLower(classname);
 
   is_reserved = IsReservedName(lower);
 
@@ -220,6 +219,20 @@ std::string DefaultForField(const FieldDescriptor* field) {
   }
 }
 
+std::string DeprecatedConditionalForField(const FieldDescriptor* field) {
+  if (field->is_repeated()) {
+    return absl::StrCat("count($this->", field->name(), ") !== 0");
+  }
+  if (field->real_containing_oneof() != nullptr) {
+    return absl::StrCat("$this->hasOneof(", field->number(), ")");
+  }
+  if (field->has_presence()) {
+    return absl::StrCat("isset($this->", field->name(), ")");
+  }
+  return absl::StrCat("$this->", field->name(), " !== ",
+                      field->has_presence() ? "null" : DefaultForField(field));
+}
+
 std::string GeneratedMetadataFileName(const FileDescriptor* file,
                                       const Options& options) {
   absl::string_view proto_file = file->name();
@@ -306,16 +319,12 @@ std::string IntToString(int32_t value) {
 }
 
 std::string LabelForField(const FieldDescriptor* field) {
-  switch (field->label()) {
-    case FieldDescriptor::LABEL_OPTIONAL:
-      return "optional";
-    case FieldDescriptor::LABEL_REQUIRED:
-      return "required";
-    case FieldDescriptor::LABEL_REPEATED:
-      return "repeated";
-    default:
-      assert(false);
-      return "";
+  if (field->is_required()) {
+    return "required";
+  } else if (field->is_repeated()) {
+    return "repeated";
+  } else {
+    return "optional";
   }
 }
 
@@ -365,10 +374,9 @@ std::string PhpSetterTypeName(const FieldDescriptor* field,
     // accommodate for edge case with multiple types.
     size_t start_pos = type.find('|');
     if (start_pos != std::string::npos) {
-      type.replace(start_pos, 1, ">|array<");
+      type.replace(start_pos, 1, "[]|");
     }
-    type = absl::StrCat("array<", type,
-                        ">|\\Google\\Protobuf\\Internal\\RepeatedField");
+    absl::StrAppend(&type, "[]");
   }
   return type;
 }
@@ -385,9 +393,7 @@ std::string PhpGetterTypeName(const FieldDescriptor* field,
   if (field->is_map()) {
     return "\\Google\\Protobuf\\Internal\\MapField";
   }
-  if (field->is_repeated()) {
-    return "\\Google\\Protobuf\\Internal\\RepeatedField";
-  }
+  std::string type;
   switch (field->type()) {
     case FieldDescriptor::TYPE_INT32:
     case FieldDescriptor::TYPE_UINT32:
@@ -395,29 +401,46 @@ std::string PhpGetterTypeName(const FieldDescriptor* field,
     case FieldDescriptor::TYPE_FIXED32:
     case FieldDescriptor::TYPE_SFIXED32:
     case FieldDescriptor::TYPE_ENUM:
-      return "int";
+      type = "int";
+      break;
     case FieldDescriptor::TYPE_INT64:
     case FieldDescriptor::TYPE_UINT64:
     case FieldDescriptor::TYPE_SINT64:
     case FieldDescriptor::TYPE_FIXED64:
     case FieldDescriptor::TYPE_SFIXED64:
-      return "int|string";
+      type = "int|string";
+      break;
     case FieldDescriptor::TYPE_DOUBLE:
     case FieldDescriptor::TYPE_FLOAT:
-      return "float";
+      type = "float";
+      break;
     case FieldDescriptor::TYPE_BOOL:
-      return "bool";
+      type = "bool";
+      break;
     case FieldDescriptor::TYPE_STRING:
     case FieldDescriptor::TYPE_BYTES:
-      return "string";
+      type = "string";
+      break;
     case FieldDescriptor::TYPE_MESSAGE:
-      return absl::StrCat("\\", FullClassName(field->message_type(), options));
+      type = absl::StrCat("\\", FullClassName(field->message_type(), options));
+      break;
     case FieldDescriptor::TYPE_GROUP:
-      return "null";
+      type = "null";
+      break;
     default:
       assert(false);
-      return "";
+      type = "";
+      break;
   }
+  if (field->is_repeated()) {
+    // accommodate for edge case with multiple types.
+    size_t start_pos = type.find('|');
+    if (start_pos != std::string::npos) {
+      type.replace(start_pos, 1, ">|RepeatedField<");
+    }
+    type = absl::StrCat("RepeatedField<", type, ">");
+  }
+  return type;
 }
 
 std::string PhpGetterTypeName(const FieldDescriptor* field,
@@ -513,7 +536,7 @@ std::string BinaryToPhpString(const std::string& src) {
     if (src[i] == '\\' || src[i] == '$' || src[i] == '"') {
       dest += '\\';
       dest += src[i];
-    } else if (std::isprint(src[i])) {
+    } else if (absl::ascii_isprint(src[i])) {
       dest += src[i];
     } else {
       dest += '\\';
@@ -528,7 +551,7 @@ std::string BinaryToPhpString(const std::string& src) {
 
 bool GenerateField(const FieldDescriptor* field, io::Printer* printer,
                    const Options& options, std::string* error) {
-  if (field->is_required()) {
+  if (!options.is_descriptor && field->is_required()) {
     *error = absl::StrCat("Can't generate PHP code for required field ",
                           field->full_name(), ".\n");
     return false;
@@ -575,9 +598,15 @@ void GenerateFieldAccessor(const FieldDescriptor* field, const Options& options,
           ? absl::StrCat("@trigger_error('", field->name(),
                          " is deprecated.', E_USER_DEPRECATED);\n        ")
           : "";
+  std::string deprecation_trigger_with_conditional =
+      (field->options().deprecated())
+          ? absl::StrCat("if (" + DeprecatedConditionalForField(field),
+                         ") {\n            ", deprecation_trigger,
+                         "}\n        ")
+          : "";
 
   // Emit getter.
-  if (oneof != NULL) {
+  if (oneof != nullptr) {
     printer->Print(
         "public function get^camel_name^()\n"
         "{\n"
@@ -585,7 +614,7 @@ void GenerateFieldAccessor(const FieldDescriptor* field, const Options& options,
         "}\n\n",
         "camel_name", UnderscoresToCamelCase(field->name(), true), "number",
         IntToString(field->number()), "deprecation_trigger",
-        deprecation_trigger);
+        deprecation_trigger_with_conditional);
   } else if (field->has_presence() && !field->message_type()) {
     printer->Print(
         "public function get^camel_name^()\n"
@@ -595,7 +624,7 @@ void GenerateFieldAccessor(const FieldDescriptor* field, const Options& options,
         "}\n\n",
         "camel_name", UnderscoresToCamelCase(field->name(), true), "name",
         field->name(), "default_value", DefaultForField(field),
-        "deprecation_trigger", deprecation_trigger);
+        "deprecation_trigger", deprecation_trigger_with_conditional);
   } else {
     printer->Print(
         "public function get^camel_name^()\n"
@@ -603,7 +632,8 @@ void GenerateFieldAccessor(const FieldDescriptor* field, const Options& options,
         "    ^deprecation_trigger^return $this->^name^;\n"
         "}\n\n",
         "camel_name", UnderscoresToCamelCase(field->name(), true), "name",
-        field->name(), "deprecation_trigger", deprecation_trigger);
+        field->name(), "deprecation_trigger",
+        deprecation_trigger_with_conditional);
   }
 
   // Emit hazzers/clear.
@@ -615,20 +645,22 @@ void GenerateFieldAccessor(const FieldDescriptor* field, const Options& options,
         "}\n\n",
         "camel_name", UnderscoresToCamelCase(field->name(), true), "number",
         IntToString(field->number()), "deprecation_trigger",
-        deprecation_trigger);
+        deprecation_trigger_with_conditional);
   } else if (field->has_presence()) {
     printer->Print(
         "public function has^camel_name^()\n"
         "{\n"
-        "    ^deprecation_trigger^return isset($this->^name^);\n"
-        "}\n\n"
+        "    ^deprecation_trigger_with_conditional^return isset($this->^name^);"
+        "\n}\n\n"
         "public function clear^camel_name^()\n"
         "{\n"
         "    ^deprecation_trigger^unset($this->^name^);\n"
         "}\n\n",
         "camel_name", UnderscoresToCamelCase(field->name(), true), "name",
         field->name(), "default_value", DefaultForField(field),
-        "deprecation_trigger", deprecation_trigger);
+        "deprecation_trigger", deprecation_trigger,
+        "deprecation_trigger_with_conditional",
+        deprecation_trigger_with_conditional);
   }
 
   // For wrapper types, generate an additional getXXXUnwrapped getter
@@ -643,7 +675,8 @@ void GenerateFieldAccessor(const FieldDescriptor* field, const Options& options,
         "$this->readWrapperValue(\"^field_name^\");\n"
         "}\n\n",
         "camel_name", UnderscoresToCamelCase(field->name(), true), "field_name",
-        field->name(), "deprecation_trigger", deprecation_trigger);
+        field->name(), "deprecation_trigger",
+        deprecation_trigger_with_conditional);
   }
 
   // Generate setter.
@@ -655,7 +688,8 @@ void GenerateFieldAccessor(const FieldDescriptor* field, const Options& options,
 
   Indent(printer);
 
-  if (field->options().deprecated()) {
+  if (field->options().deprecated() && !field->is_map() &&
+      !field->is_repeated()) {
     printer->Print("^deprecation_trigger^", "deprecation_trigger",
                    deprecation_trigger);
   }
@@ -713,7 +747,13 @@ void GenerateFieldAccessor(const FieldDescriptor* field, const Options& options,
                    UnderscoresToCamelCase(field->cpp_type_name(), true));
   }
 
-  if (oneof != NULL) {
+  if (field->options().deprecated() &&
+      (field->is_map() || field->is_repeated())) {
+    printer->Print("if (count($arr) !== 0) {\n    ^deprecation_trigger^}\n",
+                   "deprecation_trigger", deprecation_trigger);
+  }
+
+  if (oneof != nullptr) {
     printer->Print("$this->writeOneof(^number^, $var);\n", "number",
                    IntToString(field->number()));
   } else if (field->is_repeated()) {
@@ -753,9 +793,10 @@ void GenerateEnumToPool(const EnumDescriptor* en, io::Printer* printer) {
 
   for (int i = 0; i < en->value_count(); i++) {
     const EnumValueDescriptor* value = en->value(i);
-    printer->Print("->value(\"^name^\", ^number^)\n", "name",
-                   ConstantNamePrefix(value->name()) + value->name(), "number",
-                   IntToString(value->number()));
+    printer->Print(
+        "->value(\"^name^\", ^number^)\n", "name",
+        absl::StrCat(ConstantNamePrefix(value->name()), value->name()),
+        "number", IntToString(value->number()));
   }
   printer->Print("->finalizeToPool();\n\n");
   Outdent(printer);
@@ -1052,15 +1093,15 @@ void GenerateUseDeclaration(const Options& options, io::Printer* printer) {
   if (!options.is_descriptor) {
     printer->Print(
         "use Google\\Protobuf\\Internal\\GPBType;\n"
-        "use Google\\Protobuf\\Internal\\RepeatedField;\n"
-        "use Google\\Protobuf\\Internal\\GPBUtil;\n\n");
+        "use Google\\Protobuf\\Internal\\GPBUtil;\n"
+        "use Google\\Protobuf\\RepeatedField;\n\n");
   } else {
     printer->Print(
         "use Google\\Protobuf\\Internal\\GPBType;\n"
         "use Google\\Protobuf\\Internal\\GPBWire;\n"
-        "use Google\\Protobuf\\Internal\\RepeatedField;\n"
         "use Google\\Protobuf\\Internal\\InputStream;\n"
-        "use Google\\Protobuf\\Internal\\GPBUtil;\n\n");
+        "use Google\\Protobuf\\Internal\\GPBUtil;\n"
+        "use Google\\Protobuf\\RepeatedField;\n\n");
   }
 }
 
@@ -1068,6 +1109,9 @@ void GenerateHead(const FileDescriptor* file, io::Printer* printer) {
   printer->Print(
       "<?php\n"
       "# Generated by the protocol buffer compiler.  DO NOT EDIT!\n"
+      "# NO CHECKED-IN"
+      // Intentional line breaker.
+      " PROTOBUF GENCODE\n"
       "# source: ^filename^\n"
       "\n",
       "filename", file->name());
@@ -1121,7 +1165,7 @@ void GenerateMetadataFile(const FileDescriptor* file, const Options& options,
 bool GenerateEnumFile(const FileDescriptor* file, const EnumDescriptor* en,
                       const Options& options,
                       GeneratorContext* generator_context, std::string* error) {
-  if (en->is_closed()) {
+  if (!options.is_descriptor && en->is_closed()) {
     *error = absl::StrCat("Can't generate PHP code for closed enum ",
                           en->full_name(),
                           ".  Please use either proto3 or editions without "
@@ -1170,17 +1214,19 @@ bool GenerateEnumFile(const FileDescriptor* file, const EnumDescriptor* en,
       hasReserved = true;
     }
 
-    printer.Print("const ^name^ = ^number^;\n", "name", prefix + value->name(),
-                  "number", IntToString(value->number()));
+    printer.Print("const ^name^ = ^number^;\n", "name",
+                  absl::StrCat(prefix, value->name()), "number",
+                  IntToString(value->number()));
   }
 
   printer.Print("\nprivate static $valueToName = [\n");
   Indent(&printer);
   for (int i = 0; i < en->value_count(); i++) {
     const EnumValueDescriptor* value = en->value(i);
-    printer.Print("self::^constant^ => '^name^',\n", "constant",
-                  ConstantNamePrefix(value->name()) + value->name(), "name",
-                  value->name());
+    printer.Print(
+        "self::^constant^ => '^name^',\n", "constant",
+        absl::StrCat(ConstantNamePrefix(value->name()), value->name()), "name",
+        value->name());
   }
   Outdent(&printer);
   printer.Print("];\n");
@@ -1385,38 +1431,30 @@ static std::string EscapePhpdoc(absl::string_view input) {
   std::string result;
   result.reserve(input.size() * 2);
 
-  char prev = '*';
+  char prev = '\0';
 
   for (std::string::size_type i = 0; i < input.size(); i++) {
     char c = input[i];
     switch (c) {
-      case '*':
-        // Avoid "/*".
-        if (prev == '/') {
-          result.append("&#42;");
-        } else {
-          result.push_back(c);
-        }
-        break;
+      // NOTE: "/*" is allowed, do not escape it
       case '/':
-        // Avoid "*/".
+        // Escape "*/" with "{@*}".
         if (prev == '*') {
-          result.append("&#47;");
+          result.pop_back();
+          result.append("{@*}");
         } else {
           result.push_back(c);
         }
         break;
       case '@':
-        // '@' starts phpdoc tags including the @deprecated tag, which will
-        // cause a compile-time error if inserted before a declaration that
-        // does not have a corresponding @Deprecated annotation.
-        result.append("&#64;");
+        // '@' starts phpdoc tags. Play it safe and escape it.
+        result.append("\\");
+        result.push_back(c);
         break;
       default:
         result.push_back(c);
         break;
     }
-
     prev = c;
   }
 
@@ -1729,6 +1767,8 @@ void GenerateCMessage(const Descriptor* message, io::Printer* printer) {
 
   for (int i = 0; i < message->field_count(); i++) {
     auto field = message->field(i);
+    auto camel_name = UnderscoresToCamelCase(field->name(), true);
+
     printer->Print(
         "static PHP_METHOD($c_name$, get$camel_name$) {\n"
         "  Message* intern = (Message*)Z_OBJ_P(getThis());\n"
@@ -1752,8 +1792,19 @@ void GenerateCMessage(const Descriptor* message, io::Printer* printer) {
         "  RETURN_COPY(getThis());\n"
         "}\n"
         "\n",
-        "c_name", c_name, "name", field->name(), "camel_name",
-        UnderscoresToCamelCase(field->name(), true));
+        "c_name", c_name, "name", field->name(), "camel_name", camel_name);
+
+    if (field->has_presence()) {
+      printer->Print(
+          "static PHP_METHOD($c_name$, has$camel_name$) {\n"
+          "  Message* intern = (Message*)Z_OBJ_P(getThis());\n"
+          "  const upb_FieldDef *f = upb_MessageDef_FindFieldByName(\n"
+          "      intern->desc->msgdef, \"$name$\");\n"
+          "  RETVAL_BOOL(upb_Message_HasFieldByDef(intern->msg, f));\n"
+          "}\n"
+          "\n",
+          "c_name", c_name, "name", field->name(), "camel_name", camel_name);
+    }
   }
 
   for (int i = 0; i < message->real_oneof_decl_count(); i++) {
@@ -1764,7 +1815,7 @@ void GenerateCMessage(const Descriptor* message, io::Printer* printer) {
         "  const upb_OneofDef *oneof = upb_MessageDef_FindOneofByName(\n"
         "      intern->desc->msgdef, \"$name$\");\n"
         "  const upb_FieldDef *field = \n"
-        "      upb_Message_WhichOneof(intern->msg, oneof);\n"
+        "      upb_Message_WhichOneofByDef(intern->msg, oneof);\n"
         "  RETURN_STRING(field ? upb_FieldDef_Name(field) : \"\");\n"
         "}\n",
         "c_name", c_name, "name", oneof->name(), "camel_name",
@@ -1797,12 +1848,20 @@ void GenerateCMessage(const Descriptor* message, io::Printer* printer) {
 
   for (int i = 0; i < message->field_count(); i++) {
     auto field = message->field(i);
+    auto camel_name = UnderscoresToCamelCase(field->name(), true);
+
     printer->Print(
         "  PHP_ME($c_name$, get$camel_name$, arginfo_void, ZEND_ACC_PUBLIC)\n"
         "  PHP_ME($c_name$, set$camel_name$, arginfo_setter, "
         "ZEND_ACC_PUBLIC)\n",
-        "c_name", c_name, "camel_name",
-        UnderscoresToCamelCase(field->name(), true));
+        "c_name", c_name, "camel_name", camel_name);
+
+    if (field->has_presence()) {
+      printer->Print(
+          "  PHP_ME($c_name$, has$camel_name$, arginfo_void, "
+          "ZEND_ACC_PUBLIC)\n",
+          "c_name", c_name, "camel_name", camel_name);
+    }
   }
 
   for (int i = 0; i < message->real_oneof_decl_count(); i++) {
@@ -2021,13 +2080,13 @@ bool Generator::GenerateAll(const std::vector<const FileDescriptor*>& files,
                             std::string* error) const {
   Options options;
 
-  for (const auto& option : absl::StrSplit(parameter, ",", absl::SkipEmpty())) {
+  for (const auto& option : absl::StrSplit(parameter, ',', absl::SkipEmpty())) {
     const std::vector<std::string> option_pair =
-        absl::StrSplit(option, "=", absl::SkipEmpty());
+        absl::StrSplit(option, '=', absl::SkipEmpty());
     if (absl::StartsWith(option_pair[0], "aggregate_metadata")) {
       options.aggregate_metadata = true;
       for (const auto& prefix :
-           absl::StrSplit(option_pair[1], "#", absl::AllowEmpty())) {
+           absl::StrSplit(option_pair[1], '#', absl::AllowEmpty())) {
         options.aggregate_metadata_prefixes.emplace(prefix);
         ABSL_LOG(INFO) << prefix;
       }

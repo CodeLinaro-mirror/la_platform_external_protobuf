@@ -57,6 +57,7 @@ namespace {
 std::string CommaSeparatedList(
     const std::vector<const FileDescriptor*>& all_files) {
   std::vector<absl::string_view> names;
+  names.reserve(all_files.size());
   for (size_t i = 0; i < all_files.size(); i++) {
     names.push_back(all_files[i]->name());
   }
@@ -234,9 +235,9 @@ bool MockCodeGenerator::Generate(const FileDescriptor* file,
       const FeatureSet& features = GetResolvedSourceFeatures(descriptor);
       ABSL_CHECK(features.HasExtension(pb::test))
           << "Test features were not resolved properly";
-      ABSL_CHECK(features.GetExtension(pb::test).has_int_file_feature())
+      ABSL_CHECK(features.GetExtension(pb::test).has_file_feature())
           << "Test features were not resolved properly";
-      ABSL_CHECK(features.GetExtension(pb::test).has_int_source_feature())
+      ABSL_CHECK(features.GetExtension(pb::test).has_source_feature())
           << "Test features were not resolved properly";
     });
   }

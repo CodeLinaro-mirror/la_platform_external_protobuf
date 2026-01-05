@@ -28,8 +28,8 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#ifndef GOOGLE_PROTOBUF_VERSIONS_H__
-#define GOOGLE_PROTOBUF_VERSIONS_H__
+#ifndef GOOGLE_PROTOBUF_COMPILER_VERSIONS_H__
+#define GOOGLE_PROTOBUF_COMPILER_VERSIONS_H__
 
 #include "absl/strings/string_view.h"
 #include "google/protobuf/compiler/plugin.pb.h"
@@ -53,9 +53,10 @@
 //
 // Please avoid changing them manually, as they should be updated automatically
 // by Protobuf release process.
-#define PROTOBUF_CPP_VERSION_STRING "5.26.1"
-#define PROTOBUF_JAVA_VERSION_STRING "4.26.1"
-#define PROTOBUF_PYTHON_VERSION_STRING "5.26.1"
+#define PROTOBUF_CPP_VERSION_STRING "6.33.1"
+#define PROTOBUF_JAVA_VERSION_STRING "4.33.1"
+#define PROTOBUF_PYTHON_VERSION_STRING "6.33.1"
+#define PROTOBUF_RUST_VERSION_STRING "4.33.1"
 
 
 namespace google {
@@ -67,11 +68,11 @@ PROTOC_EXPORT Version ParseProtobufVersion(absl::string_view version);
 }  // namespace internal
 
 // Gets the version message according to the version strings defined above.
-const Version& GetProtobufCPPVersion();
-const Version& GetProtobufJavaVersion();
-const Version& GetProtobufPythonVersion();
+const Version& GetProtobufCPPVersion(bool oss_runtime);
+const Version& GetProtobufJavaVersion(bool oss_runtime);
+const Version& GetProtobufPythonVersion(bool oss_runtime);
 }  // namespace compiler
 }  // namespace protobuf
 }  // namespace google
 #include "google/protobuf/port_undef.inc"
-#endif  // GOOGLE_PROTOBUF_VERSIONS_H__
+#endif  // GOOGLE_PROTOBUF_COMPILER_VERSIONS_H__

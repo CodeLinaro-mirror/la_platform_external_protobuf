@@ -7,8 +7,6 @@
 
 #include "protobuf.h"
 
-#include <ruby/version.h>
-
 #include "defs.h"
 #include "map.h"
 #include "message.h"
@@ -185,7 +183,7 @@ const rb_data_type_t Arena_type = {
 };
 
 static void *ruby_upb_allocfunc(upb_alloc *alloc, void *ptr, size_t oldsize,
-                                size_t size) {
+                                size_t size, size_t *actual_size) {
   if (size == 0) {
     xfree(ptr);
     return NULL;
@@ -220,15 +218,6 @@ void Arena_fuse(VALUE _arena, upb_Arena *other) {
 }
 
 VALUE Arena_new() { return Arena_alloc(cArena); }
-
-void Arena_Pin(VALUE _arena, VALUE obj) {
-  Arena *arena;
-  TypedData_Get_Struct(_arena, Arena, &Arena_type, arena);
-  if (arena->pinned_objs == Qnil) {
-    RB_OBJ_WRITE(_arena, &arena->pinned_objs, rb_ary_new());
-  }
-  rb_ary_push(arena->pinned_objs, obj);
-}
 
 void Arena_register(VALUE module) {
   VALUE internal = rb_define_module_under(module, "Internal");
@@ -297,7 +286,8 @@ VALUE ObjectCache_Get(const void *key) {
 static VALUE Google_Protobuf_discard_unknown(VALUE self, VALUE msg_rb) {
   const upb_MessageDef *m;
   upb_Message *msg = Message_GetMutable(msg_rb, &m);
-  if (!upb_Message_DiscardUnknown(msg, m, 128)) {
+  const upb_DefPool* ext_pool = upb_FileDef_Pool(upb_MessageDef_File(m));
+  if (!upb_Message_DiscardUnknown(msg, m, ext_pool, 128)) {
     rb_raise(rb_eRuntimeError, "Messages nested too deeply.");
   }
 
@@ -353,4 +343,15 @@ __attribute__((visibility("default"))) void Init_protobuf_c() {
                              Google_Protobuf_discard_unknown, 1);
   rb_define_singleton_method(protobuf, "deep_copy", Google_Protobuf_deep_copy,
                              1);
+}
+
+// -----------------------------------------------------------------------------
+// Utilities
+// -----------------------------------------------------------------------------
+
+// Raises a Ruby error if val is frozen in Ruby or UPB.
+void Protobuf_CheckNotFrozen(VALUE val, bool upb_frozen) {
+  if (RB_UNLIKELY(rb_obj_frozen_p(val)||upb_frozen)) {
+    rb_error_frozen_object(val);
+  }
 }

@@ -7,31 +7,42 @@
 
 #include <errno.h>
 #include <stdarg.h>
+#include <stdlib.h>
 #include <unistd.h>
 
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
 #include <memory>
 #include <string>
 
-#include "google/protobuf/util/json_util.h"
-#include "google/protobuf/util/type_resolver_util.h"
+#include "google/protobuf/any.pb.h"
+#include "google/protobuf/api.pb.h"
+#include "google/protobuf/duration.pb.h"
+#include "google/protobuf/empty.pb.h"
+#include "google/protobuf/field_mask.pb.h"
+#include "google/protobuf/struct.pb.h"
+#include "google/protobuf/timestamp.pb.h"
+#include "google/protobuf/type.pb.h"
+#include "google/protobuf/wrappers.pb.h"
 #include "absl/log/absl_check.h"
 #include "absl/log/absl_log.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "conformance/conformance.pb.h"
-#include "conformance/conformance.pb.h"
-#include "google/protobuf/editions/golden/test_messages_proto2_editions.pb.h"
-#include "google/protobuf/editions/golden/test_messages_proto3_editions.pb.h"
+#include "conformance/test_protos/test_messages_edition2023.pb.h"
+#include "editions/golden/test_messages_proto2_editions.pb.h"
+#include "editions/golden/test_messages_proto3_editions.pb.h"
 #include "google/protobuf/endian.h"
+#include "google/protobuf/json/json.h"
 #include "google/protobuf/message.h"
 #include "google/protobuf/test_messages_proto2.pb.h"
 #include "google/protobuf/test_messages_proto3.pb.h"
-#include "google/protobuf/test_messages_proto3.pb.h"
 #include "google/protobuf/text_format.h"
+#include "google/protobuf/util/json_util.h"
 #include "google/protobuf/util/type_resolver.h"
+#include "google/protobuf/util/type_resolver_util.h"
 #include "google/protobuf/stubs/status_macros.h"
 
 // Must be included last.
@@ -42,11 +53,12 @@ namespace protobuf {
 namespace {
 using ::conformance::ConformanceRequest;
 using ::conformance::ConformanceResponse;
-using ::google::protobuf::util::BinaryToJsonString;
 using ::google::protobuf::util::JsonParseOptions;
-using ::google::protobuf::util::JsonToBinaryString;
+using ::google::protobuf::util::JsonStringToMessage;
+using ::google::protobuf::util::MessageToJsonString;
 using ::google::protobuf::util::NewTypeResolverForDescriptorPool;
 using ::google::protobuf::util::TypeResolver;
+using ::protobuf_test_messages::editions::TestAllTypesEdition2023;
 using ::protobuf_test_messages::proto2::TestAllTypesProto2;
 using ::protobuf_test_messages::proto3::TestAllTypesProto3;
 using TestAllTypesProto2Editions =
@@ -84,8 +96,20 @@ class Harness {
   Harness() {
     google::protobuf::LinkMessageReflection<TestAllTypesProto2>();
     google::protobuf::LinkMessageReflection<TestAllTypesProto3>();
+    google::protobuf::LinkMessageReflection<TestAllTypesEdition2023>();
     google::protobuf::LinkMessageReflection<TestAllTypesProto2Editions>();
     google::protobuf::LinkMessageReflection<TestAllTypesProto3Editions>();
+
+    // Force link one wkt from each wkt file.
+    google::protobuf::LinkMessageReflection<google::protobuf::Any>();
+    google::protobuf::LinkMessageReflection<google::protobuf::Api>();
+    google::protobuf::LinkMessageReflection<google::protobuf::Duration>();
+    google::protobuf::LinkMessageReflection<google::protobuf::Empty>();
+    google::protobuf::LinkMessageReflection<google::protobuf::FieldMask>();
+    google::protobuf::LinkMessageReflection<google::protobuf::Struct>();
+    google::protobuf::LinkMessageReflection<google::protobuf::Timestamp>();
+    google::protobuf::LinkMessageReflection<google::protobuf::Type>();
+    google::protobuf::LinkMessageReflection<google::protobuf::DoubleValue>();
 
     resolver_.reset(NewTypeResolverForDescriptorPool(
         "type.googleapis.com", DescriptorPool::generated_pool()));
@@ -132,23 +156,13 @@ absl::StatusOr<ConformanceResponse> Harness::RunTest(
       options.ignore_unknown_fields =
           (request.test_category() ==
            conformance::JSON_IGNORE_UNKNOWN_PARSING_TEST);
-
-      std::string proto_binary;
-      absl::Status status =
-          JsonToBinaryString(resolver_.get(), type_url, request.json_payload(),
-                             &proto_binary, options);
+      absl::Status status = JsonStringToMessage(request.json_payload(),
+                                                test_message.get(), options);
       if (!status.ok()) {
         response.set_parse_error(
             absl::StrCat("parse error: ", status.message()));
         return response;
       }
-
-      if (!test_message->ParseFromString(proto_binary)) {
-        response.set_runtime_error(
-            "parsing JSON generated invalid proto output");
-        return response;
-      }
-
       break;
     }
 
@@ -180,11 +194,8 @@ absl::StatusOr<ConformanceResponse> Harness::RunTest(
     }
 
     case conformance::JSON: {
-      std::string proto_binary;
-      ABSL_CHECK(test_message->SerializeToString(&proto_binary));
       absl::Status status =
-          BinaryToJsonString(resolver_.get(), type_url, proto_binary,
-                             response.mutable_json_payload());
+          MessageToJsonString(*test_message, response.mutable_json_payload());
       if (!status.ok()) {
         response.set_serialize_error(absl::StrCat(
             "failed to serialize JSON output: ", status.message()));
@@ -238,8 +249,9 @@ absl::StatusOr<bool> Harness::ServeConformanceRequest() {
                           serialized_output.size()));
 
   if (verbose_) {
-    ABSL_LOG(INFO) << "conformance-cpp: request=" << request.ShortDebugString()
-                   << ", response=" << response->ShortDebugString();
+    ABSL_LOG(INFO) << "conformance-cpp: request="
+                   << google::protobuf::ShortFormat(request)
+                   << ", response=" << google::protobuf::ShortFormat(*response);
   }
   return false;
 }
@@ -263,3 +275,5 @@ int main() {
   ABSL_LOG(INFO) << "conformance-cpp: received EOF from test runner after "
                  << total_runs << " tests";
 }
+
+#include "google/protobuf/port_undef.inc"

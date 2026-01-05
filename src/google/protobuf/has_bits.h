@@ -11,10 +11,8 @@
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <initializer_list>
-
-#include "google/protobuf/stubs/common.h"
-#include "google/protobuf/port.h"
 
 // Must be included last.
 #include "google/protobuf/port_def.inc"
@@ -27,9 +25,13 @@ namespace google {
 namespace protobuf {
 namespace internal {
 
+static constexpr int kNoHasbit = -1;
+
 template <int doublewords>
 class HasBits {
  public:
+  static constexpr int kNumHasWords = doublewords;
+
   PROTOBUF_NDEBUG_INLINE constexpr HasBits() : has_bits_{} {}
 
   constexpr HasBits(std::initializer_list<uint32_t> has_bits) : has_bits_{} {
