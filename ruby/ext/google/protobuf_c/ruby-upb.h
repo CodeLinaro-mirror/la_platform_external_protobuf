@@ -389,6 +389,27 @@ Error, UINTPTR_MAX is undefined
 #define UPB_PRESERVE_NONE
 #endif
 
+#if defined(__aarch64__) && (defined(__GNUC__) || defined(__clang__))
+#define UPB_ARM64_ASM 1
+#else
+#define UPB_ARM64_ASM 0
+#endif
+
+/* When compiling with branch protection, we need to ensure that all branch
+ * targets in assembly use the appropriate landing pad instruction. These
+ * instructions are backwards compatible with processors that don't have
+ * FEAT_BTI and are treated as nops.
+ */
+#if UPB_ARM64_ASM && defined(__ARM_FEATURE_BTI_DEFAULT)
+#if __ARM_FEATURE_BTI_DEFAULT == 1
+#define UPB_ARM64_BTI_DEFAULT 1
+#else
+#define UPB_ARM64_BTI_DEFAULT 0
+#endif
+#else
+#define UPB_ARM64_BTI_DEFAULT 0
+#endif
+
 /* This check is not fully robust: it does not require that we have "musttail"
  * support available. We need tail calls to avoid consuming arbitrary amounts
  * of stack space.
@@ -824,6 +845,7 @@ UPB_INLINE uint8_t _upb_Xsan_NextTag(upb_Xsan *xsan) {
   }
   return xsan->state;
 #else
+  UPB_UNUSED(xsan);
   return 0;
 #endif
 }
@@ -840,6 +862,7 @@ UPB_INLINE uint8_t UPB_PRIVATE(_upb_Xsan_GetTag)(const void *addr) {
 #if UPB_HWASAN
   return __hwasan_get_tag_from_pointer(addr);
 #else
+  UPB_UNUSED(addr);
   return 0;
 #endif
 }
@@ -847,6 +870,8 @@ UPB_INLINE uint8_t UPB_PRIVATE(_upb_Xsan_GetTag)(const void *addr) {
 UPB_INLINE void UPB_PRIVATE(upb_Xsan_Init)(upb_Xsan *xsan) {
 #if UPB_HWASAN || UPB_TSAN
   xsan->state = 0;
+#else
+  UPB_UNUSED(xsan);
 #endif
 }
 
@@ -859,6 +884,9 @@ UPB_INLINE void UPB_PRIVATE(upb_Xsan_PoisonRegion)(const void *addr,
   __asan_poison_memory_region(addr, size);
 #elif UPB_HWASAN
   __hwasan_tag_memory(addr, UPB_HWASAN_POISON_TAG, UPB_ALIGN_MALLOC(size));
+#else
+  UPB_UNUSED(addr);
+  UPB_UNUSED(size);
 #endif
 }
 
@@ -936,6 +964,8 @@ UPB_INLINE void UPB_PRIVATE(upb_Xsan_AccessReadOnly)(upb_Xsan *xsan) {
 #if UPB_TSAN
   // For performance we avoid using a volatile variable.
   __asm__ volatile("" ::"r"(xsan->state));
+#else
+  UPB_UNUSED(xsan);
 #endif
 }
 
@@ -943,6 +973,8 @@ UPB_INLINE void UPB_PRIVATE(upb_Xsan_AccessReadWrite)(upb_Xsan *xsan) {
 #if UPB_TSAN
   // For performance we avoid using a volatile variable.
   __asm__ volatile("" : "+r"(xsan->state));
+#else
+  UPB_UNUSED(xsan);
 #endif
 }
 
@@ -6252,6 +6284,7 @@ typedef enum {
   google_protobuf_EDITION_PROTO3 = 999,
   google_protobuf_EDITION_2023 = 1000,
   google_protobuf_EDITION_2024 = 1001,
+  google_protobuf_EDITION_UNSTABLE = 9999,
   google_protobuf_EDITION_99997_TEST_ONLY = 99997,
   google_protobuf_EDITION_99998_TEST_ONLY = 99998,
   google_protobuf_EDITION_99999_TEST_ONLY = 99999,
@@ -16708,3 +16741,5 @@ UPB_PRIVATE(upb_WireWriter_VarintUnusedSizeFromLeadingZeros64)(uint64_t clz) {
 #undef UPB_XSAN
 #undef UPB_XSAN_STRUCT_SIZE
 #undef UPB_ENABLE_REF_CYCLE_CHECKS
+#undef UPB_ARM64_ASM
+#undef UPB_ARM64_BTI_DEFAULT
