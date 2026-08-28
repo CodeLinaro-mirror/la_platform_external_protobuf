@@ -118,7 +118,7 @@ FieldGenerator* FieldGeneratorMap::MakeGenerator(const FieldDescriptor* field,
       default:
         return new PrimitiveOneofFieldGenerator(field, params);
     }
-  } else if (params.optional_field_accessors() && field->is_optional()
+  } else if (params.optional_field_accessors() && !field->is_required()
       && java_type != JAVATYPE_MESSAGE) {
     // We need a has-bit for each primitive/enum field because their default
     // values could be same as explicitly set values. But we don't need it

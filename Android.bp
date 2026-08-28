@@ -226,9 +226,8 @@ cc_defaults {
     },
 
     // This suffix must be updated when a new version is imported.
-    // It should match the "cpp" entry in version.json plus the suffix
-    // defined in GOOGLE_PROTOBUF_VERSION_SUFFIX, if any.
-    suffix: "-6.33.5-absl20260526",
+    // It should match the "cpp" entry in version.json.
+    suffix: "-7.35.1",
 }
 
 // Defaults for the lite library when thread-local storage is enabled.
@@ -387,6 +386,7 @@ cc_defaults {
         "src/google/protobuf/service.cc",
         "src/google/protobuf/source_context.pb.cc",
         "src/google/protobuf/struct.pb.cc",
+        "src/google/protobuf/symbol_checker.cc",
         "src/google/protobuf/text_format.cc",
         "src/google/protobuf/timestamp.pb.cc",
         "src/google/protobuf/type.pb.cc",
@@ -404,12 +404,14 @@ cc_defaults {
         "absl_cleanup",
         "absl_functional_function_ref",
         "absl_log_die_if_null",
+        "absl_status_statusor",
         "absl_time",
         "absl_types_variant",
     ],
     export_static_lib_headers: [
         "absl_cleanup",
         "absl_functional_function_ref",
+        "absl_status_statusor",
         "absl_types_variant",
     ],
     whole_static_libs: [
@@ -571,6 +573,7 @@ cc_library {
         "src/google/protobuf/compiler/python/helpers.cc",
         "src/google/protobuf/compiler/python/pyi_generator.cc",
         "src/google/protobuf/compiler/retention.cc",
+        "src/google/protobuf/compiler/ruby/rbs_generator.cc",
         "src/google/protobuf/compiler/ruby/ruby_generator.cc",
         "src/google/protobuf/compiler/rust/accessors/accessor_case.cc",
         "src/google/protobuf/compiler/rust/accessors/accessors.cc",
@@ -586,6 +589,7 @@ cc_library {
         "src/google/protobuf/compiler/rust/context.cc",
         "src/google/protobuf/compiler/rust/crate_mapping.cc",
         "src/google/protobuf/compiler/rust/enum.cc",
+        "src/google/protobuf/compiler/rust/extension.cc",
         "src/google/protobuf/compiler/rust/generator.cc",
         "src/google/protobuf/compiler/rust/message.cc",
         "src/google/protobuf/compiler/rust/naming.cc",
@@ -617,7 +621,10 @@ cc_library {
         "upb/mini_descriptor/link.c",
         "upb/mini_descriptor/internal/base92.c",
         "upb/mini_descriptor/internal/encode.c",
+        "upb/mini_table/compat.c",
+        "upb/mini_table/debug_string.c",
         "upb/mini_table/extension_registry.c",
+        "upb/mini_table/generated_registry.c",
         "upb/mini_table/message.c",
         "upb/mini_table/internal/message.c",
         "upb/reflection/cmake/google/protobuf/descriptor.upb_minitable.c",
@@ -826,7 +833,6 @@ java_library_static {
         "java/core/src/main/java/com/google/protobuf/Android.java",
         "java/core/src/main/java/com/google/protobuf/ArrayDecoders.java",
         "java/core/src/main/java/com/google/protobuf/BinaryReader.java",
-        "java/core/src/main/java/com/google/protobuf/BinaryWriter.java",
         "java/core/src/main/java/com/google/protobuf/BooleanArrayList.java",
         "java/core/src/main/java/com/google/protobuf/BufferAllocator.java",
         "java/core/src/main/java/com/google/protobuf/ByteBufferWriter.java",
@@ -839,6 +845,7 @@ java_library_static {
         "java/core/src/main/java/com/google/protobuf/CodedOutputStream.java",
         "java/core/src/main/java/com/google/protobuf/CodedOutputStreamWriter.java",
         "java/core/src/main/java/com/google/protobuf/CompileTimeConstant.java",
+        "java/core/src/main/java/com/google/protobuf/DoNotInline.java",
         "java/core/src/main/java/com/google/protobuf/DoubleArrayList.java",
         "java/core/src/main/java/com/google/protobuf/ExperimentalApi.java",
         "java/core/src/main/java/com/google/protobuf/ExtensionLite.java",
@@ -857,6 +864,8 @@ java_library_static {
         "java/core/src/main/java/com/google/protobuf/InlineMe.java",
         "java/core/src/main/java/com/google/protobuf/IntArrayList.java",
         "java/core/src/main/java/com/google/protobuf/Internal.java",
+        "java/core/src/main/java/com/google/protobuf/InternalLazyField.java",
+        "java/core/src/main/java/com/google/protobuf/InvalidProtobufRuntimeException.java",
         "java/core/src/main/java/com/google/protobuf/InvalidProtocolBufferException.java",
         "java/core/src/main/java/com/google/protobuf/IterableByteBufferInputStream.java",
         "java/core/src/main/java/com/google/protobuf/Java8Compatibility.java",
@@ -1003,6 +1012,9 @@ java_library_host {
 
     srcs: [
         "java/kotlin/src/main/kotlin/**/*.kt",
+    ],
+    exclude_srcs: [
+        "java/kotlin/src/main/kotlin/com/google/protobuf/ProtoHiddenFromObjC.kt",
     ],
     static_libs: [
         "libprotobuf-java-full",
@@ -1213,6 +1225,7 @@ filegroup {
         "src/google/protobuf/any_test.proto",
         "src/google/protobuf/cpp_features.proto",
         "src/google/protobuf/edition_unittest.proto",
+        "src/google/protobuf/internal_metadata_locator_test.proto",
         "src/google/protobuf/late_loaded_option_user.proto",
         "src/google/protobuf/late_loaded_option.proto",
         "src/google/protobuf/map_proto2_unittest.proto",
@@ -1220,9 +1233,13 @@ filegroup {
         "src/google/protobuf/map_unittest.proto",
         "src/google/protobuf/test_messages_proto2.proto",
         "src/google/protobuf/test_messages_proto3.proto",
+        "src/google/protobuf/test_protos/abseil_flag_test.proto",
+        "src/google/protobuf/test_protos/forced_micro_string.proto",
+        "src/google/protobuf/test_protos/repeated_field_proxy_import_message.proto",
+        "src/google/protobuf/test_protos/repeated_field_proxy_test.proto",
+        "src/google/protobuf/test_protos/repeated_ptr_field_test.proto",
         "src/google/protobuf/unittest_arena.proto",
         "src/google/protobuf/unittest_custom_options.proto",
-        "src/google/protobuf/unittest_custom_options_unlinked.proto",
         "src/google/protobuf/unittest_delimited.proto",
         "src/google/protobuf/unittest_delimited_import.proto",
         "src/google/protobuf/unittest_drop_unknown_fields.proto",
@@ -1246,7 +1263,9 @@ filegroup {
         "src/google/protobuf/unittest_redaction.proto",
         "src/google/protobuf/unittest_retention.proto",
         "src/google/protobuf/unittest_string_type.proto",
+        "src/google/protobuf/unittest_utf8_string_extensions.proto",
         "src/google/protobuf/unittest_well_known_types.proto",
+        "src/google/protobuf/util/field_mask_util_test.proto",
         "src/google/protobuf/util/json_format.proto",
         "src/google/protobuf/util/json_format_proto3.proto",
         "src/google/protobuf/util/message_differencer_unittest.proto",
@@ -1288,6 +1307,7 @@ cc_test_library {
         enabled: false,
     },
     srcs: [
+        "editions/edition_defaults_test_utils.cc",
         "src/google/protobuf/testing/file.cc",
         "src/google/protobuf/testing/googletest.cc",
         "src/google/protobuf/unredacted_debug_format_for_test.cc",
@@ -1316,6 +1336,7 @@ cc_test {
         "src/google/protobuf/arenastring_unittest.cc",
         "src/google/protobuf/arenaz_sampler_test.cc",
         "src/google/protobuf/descriptor_database_unittest.cc",
+        "src/google/protobuf/descriptor_test_utils.cc",
         "src/google/protobuf/descriptor_unittest.cc",
         "src/google/protobuf/descriptor_visitor_test.cc",
         "src/google/protobuf/drop_unknown_fields_test.cc",
@@ -1323,6 +1344,7 @@ cc_test {
         "src/google/protobuf/edition_message_unittest.cc",
         "src/google/protobuf/extension_set_unittest.cc",
         "src/google/protobuf/feature_resolver_test.cc",
+        "src/google/protobuf/field_with_arena_test.cc",
         "src/google/protobuf/fully_verify_message_sets_opt_out.cc",
         "src/google/protobuf/generated_message_reflection_unittest.cc",
         "src/google/protobuf/generated_message_tctable_lite_test.cc",
@@ -1330,6 +1352,7 @@ cc_test {
         "src/google/protobuf/inlined_string_field_unittest.cc",
         "src/google/protobuf/internal_feature_helper_test.cc",
         "src/google/protobuf/internal_message_util_unittest.cc",
+        "src/google/protobuf/internal_metadata_locator_test.cc",
         "src/google/protobuf/io/coded_stream_unittest.cc",
         "src/google/protobuf/io/io_win32_unittest.cc",
         "src/google/protobuf/io/printer_unittest.cc",
@@ -1359,6 +1382,7 @@ cc_test {
         "src/google/protobuf/string_block_test.cc",
         "src/google/protobuf/string_piece_field_support_unittest.cc",
         "src/google/protobuf/string_view_test.cc",
+        "src/google/protobuf/symbol_checker_test.cc",
         "src/google/protobuf/test_util.cc",
         "src/google/protobuf/text_format_unittest.cc",
         "src/google/protobuf/unknown_field_set_unittest.cc",
@@ -1482,7 +1506,6 @@ cc_test_host {
     defaults: ["libprotobuf-test-defaults"],
     srcs: [
         ":libprotoc-test-protos",
-        "editions/edition_defaults_test_utils.cc",
         "editions/edition_defaults_test_utils_test.cc",
         "src/google/protobuf/compiler/annotation_test_util.cc",
         "src/google/protobuf/compiler/code_generator_unittest.cc",
@@ -1514,6 +1537,7 @@ cc_test_host {
         "src/google/protobuf/compiler/retention_unittest.cc",
         "src/google/protobuf/compiler/rust/crate_mapping_unittest.cc",
         "src/google/protobuf/compiler/rust/enum_test.cc",
+        "src/google/protobuf/compiler/rust/generator_test.cc",
         "src/google/protobuf/compiler/rust/naming_test.cc",
         "src/google/protobuf/compiler/rust/relative_path_test.cc",
         "src/google/protobuf/compiler/versions_test.cc",
@@ -1585,6 +1609,7 @@ java_test {
         "java/core/src/test/java/com/google/protobuf/GeneratedMessageTest.java",
         "java/core/src/test/java/com/google/protobuf/GeneratorNamesTest.java",
         "java/core/src/test/java/com/google/protobuf/ImportOptionTest.java",
+        "java/core/src/test/java/com/google/protobuf/LargeEnumTest.java",
         "java/core/src/test/java/com/google/protobuf/LazilyParsedMessageSetTest.java",
         "java/core/src/test/java/com/google/protobuf/LazyFieldTest.java",
         "java/core/src/test/java/com/google/protobuf/LazyStringEndToEndTest.java",
@@ -1669,6 +1694,7 @@ java_test_host {
         "java/core/src/test/java/com/google/protobuf/IsValidUtf8TestUtil.java",
         "java/core/src/test/proto/com/google/protobuf/nested_extension_lite.proto",
         "java/core/src/test/proto/com/google/protobuf/non_nested_extension_lite.proto",
+        "src/google/protobuf/test_protos/abseil_flag_test.proto",
     ],
     data: [
         "src/google/protobuf/testdata/*",
@@ -1752,6 +1778,9 @@ java_test_host {
         "java/core/src/test/java/com/google/protobuf/TestUtilLite.java",
         "java/kotlin/src/test/kotlin/**/*.kt",
         "java/kotlin/src/test/proto/**/*.proto",
+    ],
+    exclude_srcs: [
+        "src/google/protobuf/test_protos/abseil_flag_test.proto",
     ],
     data: [
         "src/google/protobuf/testdata/*",
@@ -1953,7 +1982,7 @@ cc_binary_host {
 
 rust_defaults {
     name: "libprotobuf_google_version_defaults",
-    cargo_pkg_version: "4.33.5",
+    cargo_pkg_version: "4.35.1",
     cargo_env_compat: true,
 }
 
@@ -1965,7 +1994,6 @@ rust_defaults {
     srcs: ["rust/shared.rs"],
     edition: "2021",
     rustlibs: [
-        "libutf8_google",
         "libprotobuf_cpp_alloc",
     ],
     proc_macros: [
@@ -2002,21 +2030,6 @@ rust_test {
     team: "trendy_team_android_rust",
     defaults: ["libprotobuf_google_defaults"],
     rustlibs: ["libgoogletest_rust"],
-}
-
-rust_library {
-    name: "libutf8_google",
-    min_sdk_version: "apex_inherit",
-    crate_name: "utf8",
-    srcs: ["rust/utf8.rs"],
-    edition: "2021",
-    host_supported: true,
-    vendor_available: true,
-    product_available: true,
-    apex_available: [
-        "//apex_available:platform",
-        "//apex_available:anyapex",
-    ],
 }
 
 rust_proc_macro {
@@ -2069,6 +2082,7 @@ cc_library_static {
     srcs: [
         "rust/cpp_kernel/compare.cc",
         "rust/cpp_kernel/debug.cc",
+        "rust/cpp_kernel/extension.cc",
         "rust/cpp_kernel/map.cc",
         "rust/cpp_kernel/message.cc",
         "rust/cpp_kernel/repeated.cc",
