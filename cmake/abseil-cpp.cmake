@@ -79,7 +79,6 @@ else()
     absl::memory
     absl::node_hash_map
     absl::node_hash_set
-    absl::optional
     absl::random_distributions
     absl::random_random
     absl::span
@@ -92,6 +91,5 @@ else()
   )
   set(protobuf_ABSL_USED_TEST_TARGETS
     absl::scoped_mock_log
-    absl::status_matchers
   )
 endif ()

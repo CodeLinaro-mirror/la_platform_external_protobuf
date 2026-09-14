@@ -7,6 +7,7 @@
 use conformance_rust_proto::{ConformanceRequest, ConformanceResponse, WireFormat};
 
 use protobuf::prelude::*;
+use protobuf::Optional::{Set, Unset};
 use protobuf::{Message, ParseError};
 
 use std::io::{self, ErrorKind, Read, Write};
@@ -62,11 +63,11 @@ fn do_test(req: &ConformanceRequest) -> ConformanceResponse {
     }
 
     let bytes = match req.protobuf_payload_opt() {
-        Some(bytes) => bytes,
-        None => {
+        Unset(_) => {
             resp.set_skipped("only wire format input implemented");
             return resp;
         }
+        Set(bytes) => bytes,
     };
 
     fn roundtrip<T: Message>(bytes: &[u8]) -> Result<Vec<u8>, ParseError> {

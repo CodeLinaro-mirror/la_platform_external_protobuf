@@ -781,13 +781,14 @@ int FixedSize(FieldDescriptor::Type type) {
 
 // Sort the fields of the given Descriptor by number into a new[]'d array
 // and return it. The caller should delete the returned array.
-std::vector<const FieldDescriptor*> SortFieldsByNumber(
-    const Descriptor* descriptor) {
-  std::vector<const FieldDescriptor*> fields(descriptor->field_count());
-  for (int i = 0; i < descriptor->field_count(); ++i) {
+const FieldDescriptor** SortFieldsByNumber(const Descriptor* descriptor) {
+  const FieldDescriptor** fields =
+      new const FieldDescriptor*[descriptor->field_count()];
+  for (int i = 0; i < descriptor->field_count(); i++) {
     fields[i] = descriptor->field(i);
   }
-  std::sort(fields.begin(), fields.end(), FieldOrderingByNumber());
+  std::sort(fields, fields + descriptor->field_count(),
+            FieldOrderingByNumber());
   return fields;
 }
 

@@ -109,8 +109,5 @@ rust_binary {
         "libprotobuf_example_rust",
         "libprotobuf_google",
     ],
-    static_libs: [
-        "libprotobuf_cpp_api",
-    ],
     host_supported: true,
 }

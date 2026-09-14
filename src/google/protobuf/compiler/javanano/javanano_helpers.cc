@@ -405,7 +405,7 @@ std::string EmptyArrayName(const Params& params, const FieldDescriptor* field) {
 }
 
 std::string DefaultValue(const Params& params, const FieldDescriptor* field) {
-  if (field->is_repeated()) {
+  if (field->label() == FieldDescriptor::LABEL_REPEATED) {
     return EmptyArrayName(params, field);
   }
 

@@ -16,6 +16,7 @@
 #include <cstdint>
 #include <limits>
 #include <memory>
+#include <optional>
 #include <queue>
 #include <string>
 #include <type_traits>
@@ -40,7 +41,6 @@
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
 #include "absl/synchronization/mutex.h"
-#include "absl/types/optional.h"
 #include "absl/types/span.h"
 #include "google/protobuf/arenastring.h"
 #include "google/protobuf/compiler/code_generator.h"
@@ -56,7 +56,6 @@
 #include "google/protobuf/io/printer.h"
 #include "google/protobuf/io/strtod.h"
 #include "google/protobuf/map.h"
-#include "google/protobuf/port.h"
 #include "google/protobuf/repeated_ptr_field.h"
 #include "google/protobuf/wire_format.h"
 #include "google/protobuf/wire_format_lite.h"
@@ -237,22 +236,28 @@ std::string IntTypeName(const Options& options, absl::string_view type) {
 
 
 
+bool HasV2Table(const Descriptor* descriptor, const Options& options) {
+  return false;
+}
+
 }  // namespace
 
-bool IsLazy(const FieldDescriptor* field, const Options& options) {
+bool IsLazy(const FieldDescriptor* field, const Options& options,
+            MessageSCCAnalyzer* scc_analyzer) {
   return IsLazilyVerifiedLazy(field, options) ||
-         IsEagerlyVerifiedLazy(field, options);
+         IsEagerlyVerifiedLazy(field, options, scc_analyzer);
 }
 
 // Returns true if "field" is a message field that is backed by LazyField per
 // profile (go/pdlazy).
 inline bool IsLazyByProfile(const FieldDescriptor* field,
-                            const Options& options) {
+                            const Options& options,
+                            MessageSCCAnalyzer* scc_analyzer) {
   return false;
 }
 
-bool IsEagerlyVerifiedLazy(const FieldDescriptor* field,
-                           const Options& options) {
+bool IsEagerlyVerifiedLazy(const FieldDescriptor* field, const Options& options,
+                           MessageSCCAnalyzer* scc_analyzer) {
   return false;
 }
 
@@ -262,8 +267,9 @@ bool IsLazilyVerifiedLazy(const FieldDescriptor* field,
 }
 
 internal::field_layout::TransformValidation GetLazyStyle(
-    const FieldDescriptor* field, const Options& options) {
-  if (IsEagerlyVerifiedLazy(field, options)) {
+    const FieldDescriptor* field, const Options& options,
+    MessageSCCAnalyzer* scc_analyzer) {
+  if (IsEagerlyVerifiedLazy(field, options, scc_analyzer)) {
     return internal::field_layout::kTvEager;
   }
   if (IsLazilyVerifiedLazy(field, options)) {
@@ -280,6 +286,8 @@ absl::flat_hash_map<absl::string_view, std::string> MessageVars(
       {"cached_size", absl::StrCat(prefix, "_cached_size_")},
       {"extensions", absl::StrCat(prefix, "_extensions_")},
       {"has_bits", absl::StrCat(prefix, "_has_bits_")},
+      {"inlined_string_donated_array",
+       absl::StrCat(prefix, "_inlined_string_donated_")},
       {"oneof_case", absl::StrCat(prefix, "_oneof_case_")},
       {"tracker", "Impl_::_tracker_"},
       {"weak_field_map", absl::StrCat(prefix, "_weak_field_map_")},
@@ -363,7 +371,8 @@ const char kThinSeparator[] =
     "// -------------------------------------------------------------------\n";
 
 bool CanInitializeByZeroing(const FieldDescriptor* field,
-                            const Options& options) {
+                            const Options& options,
+                            MessageSCCAnalyzer* scc_analyzer) {
   static_assert(
       std::numeric_limits<float>::is_iec559 &&
           std::numeric_limits<double>::is_iec559,
@@ -419,7 +428,8 @@ bool CanClearByZeroing(const FieldDescriptor* field) {
 }
 
 // Determines if swap can be implemented via memcpy.
-bool HasTrivialSwap(const FieldDescriptor* field, const Options& options) {
+bool HasTrivialSwap(const FieldDescriptor* field, const Options& options,
+                    MessageSCCAnalyzer* scc_analyzer) {
   if (field->is_repeated() || field->is_extension()) return false;
   switch (field->cpp_type()) {
     case FieldDescriptor::CPPTYPE_ENUM:
@@ -434,7 +444,7 @@ bool HasTrivialSwap(const FieldDescriptor* field, const Options& options) {
     case FieldDescriptor::CPPTYPE_MESSAGE:
       // Non-repeated, non-lazy message fields are simply raw pointers, so we
       // can swap them with memcpy.
-      return !IsLazy(field, options);
+      return !IsLazy(field, options, scc_analyzer);
     default:
       return false;
   }
@@ -548,58 +558,53 @@ std::string Namespace(absl::string_view package) {
   return absl::StrCat("::", absl::StrJoin(scope, "::"));
 }
 
-std::string Namespace(const FileDescriptor* d) {
+std::string Namespace(const FileDescriptor* d) { return Namespace(d, {}); }
+std::string Namespace(const FileDescriptor* d, const Options& options) {
   return Namespace(d->package());
 }
 
-std::string Namespace(const Descriptor* d) { return Namespace(d->file()); }
-
-std::string Namespace(const FieldDescriptor* d) { return Namespace(d->file()); }
-
-std::string Namespace(const EnumDescriptor* d) { return Namespace(d->file()); }
-
-std::string SplitDefaultInstanceType(const Descriptor* descriptor,
-                                     const Options& /*options*/) {
-  return absl::StrCat(ClassName(descriptor), "__Impl_SplitDefaultTypeInternal");
+std::string Namespace(const Descriptor* d) { return Namespace(d, {}); }
+std::string Namespace(const Descriptor* d, const Options& options) {
+  return Namespace(d->file(), options);
 }
 
-std::string SplitDefaultInstanceName(const Descriptor* descriptor,
-                                     const Options& /*options*/) {
-  return absl::StrCat(ClassName(descriptor, false),
-                      "_Impl_Split_default_instance_");
+std::string Namespace(const FieldDescriptor* d) { return Namespace(d, {}); }
+std::string Namespace(const FieldDescriptor* d, const Options& options) {
+  return Namespace(d->file(), options);
 }
 
-std::string MsgGlobalsInstanceType(const Descriptor* descriptor,
-                                   const Options& /*options*/) {
-  return absl::StrCat(ClassName(descriptor), "GlobalsTypeInternal");
+std::string Namespace(const EnumDescriptor* d) { return Namespace(d, {}); }
+std::string Namespace(const EnumDescriptor* d, const Options& options) {
+  return Namespace(d->file(), options);
 }
 
-std::string MsgGlobalsInstanceName(const Descriptor* descriptor,
-                                   const Options& /*options*/) {
-  return absl::StrCat(ClassName(descriptor, false), "_globals_");
+std::string DefaultInstanceType(const Descriptor* descriptor,
+                                const Options& /*options*/, bool split) {
+  return ClassName(descriptor) + (split ? "__Impl_Split" : "") +
+         "DefaultTypeInternal";
 }
 
-std::string MsgGlobalsInstancePtr(const Descriptor* descriptor,
-                                  const Options& options) {
-  return absl::StrCat(MsgGlobalsInstanceName(descriptor, options), "ptr_");
+std::string DefaultInstanceName(const Descriptor* descriptor,
+                                const Options& /*options*/, bool split) {
+  return absl::StrCat("_", ClassName(descriptor, false),
+                      (split ? "__Impl_Split" : ""), "_default_instance_");
 }
 
-std::string QualifiedSplitDefaultInstanceName(const Descriptor* descriptor,
-                                              const Options& options) {
-  return QualifiedFileLevelSymbol(descriptor->file(),
-                                  SplitDefaultInstanceName(descriptor, options),
-                                  options);
+std::string DefaultInstancePtr(const Descriptor* descriptor,
+                               const Options& options, bool split) {
+  return absl::StrCat(DefaultInstanceName(descriptor, options, split), "ptr_");
 }
 
-std::string QualifiedMsgGlobalsInstanceName(const Descriptor* descriptor,
-                                            const Options& options) {
+std::string QualifiedDefaultInstanceName(const Descriptor* descriptor,
+                                         const Options& options, bool split) {
   return QualifiedFileLevelSymbol(
-      descriptor->file(), MsgGlobalsInstanceName(descriptor, options), options);
+      descriptor->file(), DefaultInstanceName(descriptor, options, split),
+      options);
 }
 
-std::string QualifiedMsgGlobalsInstancePtr(const Descriptor* descriptor,
-                                           const Options& options) {
-  return absl::StrCat(QualifiedMsgGlobalsInstanceName(descriptor, options),
+std::string QualifiedDefaultInstancePtr(const Descriptor* descriptor,
+                                        const Options& options, bool split) {
+  return absl::StrCat(QualifiedDefaultInstanceName(descriptor, options, split),
                       "ptr_");
 }
 
@@ -610,7 +615,8 @@ std::string ClassDataType(const Descriptor* descriptor,
                  // via options.
                  IsBootstrapProto(options, descriptor->file())
              ? "ClassDataFull"
-             : "ClassDataLite";
+             : absl::StrFormat("ClassDataLite<%d>",
+                               descriptor->full_name().size() + 1);
 }
 
 std::string DescriptorTableName(const FileDescriptor* file,
@@ -878,6 +884,36 @@ const char* DeclaredTypeMethodName(FieldDescriptor::Type type) {
   return "";
 }
 
+absl::string_view DeclaredCppTypeMethodName(FieldDescriptor::CppType type) {
+  switch (type) {
+    case FieldDescriptor::CPPTYPE_INT32:
+      return "Int32";
+    case FieldDescriptor::CPPTYPE_INT64:
+      return "Int64";
+    case FieldDescriptor::CPPTYPE_UINT32:
+      return "UInt32";
+    case FieldDescriptor::CPPTYPE_UINT64:
+      return "UInt64";
+    case FieldDescriptor::CPPTYPE_DOUBLE:
+      return "Double";
+    case FieldDescriptor::CPPTYPE_FLOAT:
+      return "Float";
+    case FieldDescriptor::CPPTYPE_BOOL:
+      return "Bool";
+    case FieldDescriptor::CPPTYPE_ENUM:
+      return "Enum";
+    case FieldDescriptor::CPPTYPE_STRING:
+      return "String";
+    case FieldDescriptor::CPPTYPE_MESSAGE:
+      return "Message";
+
+      // No default because we want the compiler to complain if any new
+      // types are added.
+  }
+  ABSL_LOG(FATAL) << "Can't get here.";
+  return "";
+}
+
 std::string Int32ToString(int number) {
   if (number == std::numeric_limits<int32_t>::min()) {
     // This needs to be special-cased, see explanation here:
@@ -918,11 +954,11 @@ std::string DefaultValue(const Options& options, const FieldDescriptor* field) {
     case FieldDescriptor::CPPTYPE_DOUBLE: {
       double value = field->default_value_double();
       if (value == std::numeric_limits<double>::infinity()) {
-        return "::std::numeric_limits<double>::infinity()";
+        return "std::numeric_limits<double>::infinity()";
       } else if (value == -std::numeric_limits<double>::infinity()) {
-        return "-::std::numeric_limits<double>::infinity()";
+        return "-std::numeric_limits<double>::infinity()";
       } else if (value != value) {
-        return "::std::numeric_limits<double>::quiet_NaN()";
+        return "std::numeric_limits<double>::quiet_NaN()";
       } else {
         return io::SimpleDtoa(value);
       }
@@ -930,11 +966,11 @@ std::string DefaultValue(const Options& options, const FieldDescriptor* field) {
     case FieldDescriptor::CPPTYPE_FLOAT: {
       float value = field->default_value_float();
       if (value == std::numeric_limits<float>::infinity()) {
-        return "::std::numeric_limits<float>::infinity()";
+        return "std::numeric_limits<float>::infinity()";
       } else if (value == -std::numeric_limits<float>::infinity()) {
-        return "-::std::numeric_limits<float>::infinity()";
+        return "-std::numeric_limits<float>::infinity()";
       } else if (value != value) {
-        return "::std::numeric_limits<float>::quiet_NaN()";
+        return "std::numeric_limits<float>::quiet_NaN()";
       } else {
         std::string float_value = io::SimpleFtoa(value);
         // If floating point value contains a period (.) or an exponent
@@ -997,7 +1033,7 @@ std::string QualifiedFileLevelSymbol(const FileDescriptor* file,
   if (file->package().empty()) {
     return absl::StrCat("::", name);
   }
-  return absl::StrCat(Namespace(file), "::", name);
+  return absl::StrCat(Namespace(file, options), "::", name);
 }
 
 // Escape C++ trigraphs by escaping question marks to \?
@@ -1038,22 +1074,22 @@ bool IsLikelyPresent(const FieldDescriptor* field, const Options& options) {
   return false;
 }
 
-absl::optional<float> GetPresenceProbability(const FieldDescriptor* field,
-                                             const Options& options) {
-  return absl::nullopt;
+std::optional<float> GetPresenceProbability(const FieldDescriptor* field,
+                                            const Options& options) {
+  return std::nullopt;
 }
 
-absl::optional<float> GetFieldGroupPresenceProbability(
+std::optional<float> GetFieldGroupPresenceProbability(
     const std::vector<const FieldDescriptor*>& fields, const Options& options) {
   ABSL_DCHECK(!fields.empty());
-  if (!IsProfileDriven(options)) return absl::nullopt;
+  if (!IsProfileDriven(options)) return std::nullopt;
 
   double all_absent_probability = 1.0;
 
   for (const auto* field : fields) {
-    absl::optional<float> probability = GetPresenceProbability(field, options);
+    std::optional<float> probability = GetPresenceProbability(field, options);
     if (!probability) {
-      return absl::nullopt;
+      return std::nullopt;
     }
     all_absent_probability *= 1.0 - *probability;
   }
@@ -1101,20 +1137,20 @@ bool IsStringInlined(const FieldDescriptor* field, const Options& options) {
   return false;
 }
 
-static bool HasLazyFields(const Descriptor* descriptor,
-                          const Options& options) {
+static bool HasLazyFields(const Descriptor* descriptor, const Options& options,
+                          MessageSCCAnalyzer* scc_analyzer) {
   for (int field_idx = 0; field_idx < descriptor->field_count(); field_idx++) {
-    if (IsLazy(descriptor->field(field_idx), options)) {
+    if (IsLazy(descriptor->field(field_idx), options, scc_analyzer)) {
       return true;
     }
   }
   for (int idx = 0; idx < descriptor->extension_count(); idx++) {
-    if (IsLazy(descriptor->extension(idx), options)) {
+    if (IsLazy(descriptor->extension(idx), options, scc_analyzer)) {
       return true;
     }
   }
   for (int idx = 0; idx < descriptor->nested_type_count(); idx++) {
-    if (HasLazyFields(descriptor->nested_type(idx), options)) {
+    if (HasLazyFields(descriptor->nested_type(idx), options, scc_analyzer)) {
       return true;
     }
   }
@@ -1122,15 +1158,16 @@ static bool HasLazyFields(const Descriptor* descriptor,
 }
 
 // Does the given FileDescriptor use lazy fields?
-bool HasLazyFields(const FileDescriptor* file, const Options& options) {
+bool HasLazyFields(const FileDescriptor* file, const Options& options,
+                   MessageSCCAnalyzer* scc_analyzer) {
   for (int i = 0; i < file->message_type_count(); i++) {
     const Descriptor* descriptor(file->message_type(i));
-    if (HasLazyFields(descriptor, options)) {
+    if (HasLazyFields(descriptor, options, scc_analyzer)) {
       return true;
     }
   }
   for (int field_idx = 0; field_idx < file->extension_count(); field_idx++) {
-    if (IsLazy(file->extension(field_idx), options)) {
+    if (IsLazy(file->extension(field_idx), options, scc_analyzer)) {
       return true;
     }
   }
@@ -1138,17 +1175,12 @@ bool HasLazyFields(const FileDescriptor* file, const Options& options) {
 }
 
 bool IsMicroString(const FieldDescriptor* field, const Options& opts) {
-  if (field->is_repeated()) return false;
-  if (field->is_extension()) return false;
-  if (field->cpp_type() != FieldDescriptor::CPPTYPE_STRING) return false;
-  if (field->cpp_string_type() != FieldDescriptor::CppStringType::kView)
-    return false;
-
-  // map entry fields don't use MicroString right now
-  if (field->containing_type()->options().map_entry()) return false;
-
-
-  return opts.experimental_use_micro_string;
+  return !field->is_repeated() && !field->is_extension() &&
+         field->cpp_type() == FieldDescriptor::CPPTYPE_STRING &&
+         field->cpp_string_type() == FieldDescriptor::CppStringType::kView &&
+         opts.experimental_use_micro_string &&
+         // map entry fields don't use MicroString right now
+         !field->containing_type()->options().map_entry();
 }
 
 bool IsArenaStringPtr(const FieldDescriptor* field, const Options& opts) {
@@ -1157,15 +1189,19 @@ bool IsArenaStringPtr(const FieldDescriptor* field, const Options& opts) {
          field->cpp_string_type() == FieldDescriptor::CppStringType::kView;
 }
 
-bool ShouldVerify(const Descriptor* descriptor, const Options& options) {
+bool ShouldVerify(const Descriptor* descriptor, const Options& options,
+                  MessageSCCAnalyzer* scc_analyzer) {
   (void)descriptor;
   (void)options;
+  (void)scc_analyzer;
   return false;
 }
 
-bool ShouldVerify(const FileDescriptor* file, const Options& options) {
+bool ShouldVerify(const FileDescriptor* file, const Options& options,
+                  MessageSCCAnalyzer* scc_analyzer) {
   (void)file;
   (void)options;
+  (void)scc_analyzer;
   return false;
 }
 
@@ -1203,30 +1239,21 @@ const FieldDescriptor* FindHottestField(
   return nullptr;
 }
 
-static bool HasRepeatedFields(
-    const Descriptor* descriptor,
-    FieldDescriptor::CppRepeatedType cpp_repeated_type) {
+static bool HasRepeatedFields(const Descriptor* descriptor) {
   for (int i = 0; i < descriptor->field_count(); ++i) {
-    const auto* field = descriptor->field(i);
-    if (field->is_repeated() && !field->is_map() &&
-        CalculateFieldDescriptorRepeatedType(field) == cpp_repeated_type) {
+    if (descriptor->field(i)->is_repeated()) {
       return true;
     }
   }
   for (int i = 0; i < descriptor->nested_type_count(); ++i) {
-    if (HasRepeatedFields(descriptor->nested_type(i), cpp_repeated_type)) {
-      return true;
-    }
+    if (HasRepeatedFields(descriptor->nested_type(i))) return true;
   }
   return false;
 }
 
-bool HasRepeatedFields(const FileDescriptor* file,
-                       FieldDescriptor::CppRepeatedType cpp_repeated_type) {
+bool HasRepeatedFields(const FileDescriptor* file) {
   for (int i = 0; i < file->message_type_count(); ++i) {
-    if (HasRepeatedFields(file->message_type(i), cpp_repeated_type)) {
-      return true;
-    }
+    if (HasRepeatedFields(file->message_type(i))) return true;
   }
   return false;
 }
@@ -1319,6 +1346,36 @@ bool HasMapFields(const FileDescriptor* file) {
   for (int i = 0; i < file->message_type_count(); ++i) {
     if (HasMapFields(file->message_type(i))) return true;
   }
+  return false;
+}
+
+bool IsV2EnabledForMessage(const Descriptor* descriptor,
+                           const Options& options) {
+  return false;
+}
+
+// Returns true if a message (descriptor) directly has required fields. Later
+// CLs will expand to cover transitively required fields.
+bool ShouldVerifyV2(const Descriptor* descriptor, const Options& options,
+                    MessageSCCAnalyzer* scc_analyzer) {
+  return false;
+}
+
+
+bool HasV2MessageTable(const FileDescriptor* file, const Options& options) {
+  for (int i = 0; i < file->message_type_count(); ++i) {
+    if (HasV2Table(file->message_type(i), options)) return true;
+  }
+  return false;
+}
+
+
+bool IsV2ParseEnabledForMessage(const Descriptor* descriptor,
+                                const Options& options) {
+  return false;
+}
+
+bool HasV2ParseTable(const FileDescriptor* file, const Options& options) {
   return false;
 }
 
@@ -1478,6 +1535,14 @@ void GenerateUtf8CheckCodeForString(const FieldDescriptor* field,
                                     const Formatter& format) {
   GenerateUtf8CheckCode(format.printer(), field, options, for_parse, parameters,
                         "VerifyUtf8String", "VerifyUTF8StringNamedField");
+}
+
+void GenerateUtf8CheckCodeForCord(const FieldDescriptor* field,
+                                  const Options& options, bool for_parse,
+                                  absl::string_view parameters,
+                                  const Formatter& format) {
+  GenerateUtf8CheckCode(format.printer(), field, options, for_parse, parameters,
+                        "VerifyUtf8Cord", "VerifyUTF8CordNamedField");
 }
 
 void GenerateUtf8CheckCodeForString(io::Printer* p,
@@ -1676,7 +1741,7 @@ bool UsingImplicitWeakDescriptor(const FileDescriptor* file,
 
 std::string StrongReferenceToType(const Descriptor* desc,
                                   const Options& options) {
-  const auto name = QualifiedMsgGlobalsInstanceName(desc, options);
+  const auto name = QualifiedDefaultInstanceName(desc, options);
   return absl::StrFormat("::%s::internal::StrongPointer<decltype(%s)*, &%s>()",
                          ProtobufNamespace(options), name, name);
 }
@@ -1702,7 +1767,8 @@ bool UsingImplicitWeakFields(const FileDescriptor* file,
          GetOptimizeFor(file, options) == FileOptions::LITE_RUNTIME;
 }
 
-bool IsImplicitWeakField(const FieldDescriptor* field, const Options& options) {
+bool IsImplicitWeakField(const FieldDescriptor* field, const Options& options,
+                         MessageSCCAnalyzer* scc_analyzer) {
   return UsingImplicitWeakFields(field->file(), options) &&
          field->type() == FieldDescriptor::TYPE_MESSAGE &&
          !field->is_required() && !field->is_map() && !field->is_extension() &&
@@ -1711,8 +1777,8 @@ bool IsImplicitWeakField(const FieldDescriptor* field, const Options& options) {
              "net/proto2/proto/descriptor.proto" &&
          // We do not support implicit weak fields between messages in the same
          // strongly-connected component.
-         options.scc_analyzer->GetSCC(field->containing_type()) !=
-             options.scc_analyzer->GetSCC(field->message_type());
+         scc_analyzer->GetSCC(field->containing_type()) !=
+             scc_analyzer->GetSCC(field->message_type());
 }
 
 MessageAnalysis MessageSCCAnalyzer::GetSCCAnalysis(const SCC* scc) {
@@ -1813,7 +1879,7 @@ int CollectFieldsExcludingWeakAndOneof(
     const Descriptor* d, const Options& options,
     std::vector<const FieldDescriptor*>& fields) {
   int num_weak_fields = 0;
-  for (auto field : internal::FieldRange(d)) {
+  for (auto field : FieldRange(d)) {
     if (IsWeak(field, options)) {
       ++num_weak_fields;
     }
@@ -1850,8 +1916,6 @@ bool GetBootstrapBasename(const Options& options, absl::string_view basename,
            "third_party/protobuf/descriptor"},
           {"third_party/protobuf/cpp_features",
            "third_party/protobuf/cpp_features"},
-          {"third_party/protobuf/cpp_file_options",
-           "third_party/protobuf/cpp_file_options_bootstrap"},
           {"third_party/protobuf/compiler/plugin",
            "third_party/protobuf/compiler/plugin"},
           {"third_party/protobuf/internal_options",
@@ -2035,7 +2099,7 @@ static bool HasBootstrapProblem(const FileDescriptor* file,
   // are converted to extensions.
   DynamicMessageFactory factory(pool);
   Message* fd_proto = factory.GetPrototype(fd_proto_descriptor)->New();
-  ABSL_CHECK(fd_proto->ParseFromString(linkedin_fd_proto.SerializeAsString()));
+  fd_proto->ParseFromString(linkedin_fd_proto.SerializeAsString());
 
   bool res = HasExtensionFromFile(*fd_proto, file, options,
                                   has_opt_codesize_extension);
@@ -2085,7 +2149,7 @@ FileOptions_OptimizeMode GetOptimizeFor(const FileDescriptor* file,
 
 bool HasMessageFieldOrExtension(const Descriptor* desc) {
   if (desc->extension_range_count() > 0) return true;
-  for (const auto* f : internal::FieldRange(desc)) {
+  for (const auto* f : FieldRange(desc)) {
     if (f->cpp_type() == FieldDescriptor::CPPTYPE_MESSAGE) return true;
   }
   return false;
@@ -2093,7 +2157,7 @@ bool HasMessageFieldOrExtension(const Descriptor* desc) {
 
 std::vector<io::Printer::Sub> AnnotatedAccessors(
     const FieldDescriptor* field, absl::Span<const absl::string_view> prefixes,
-    absl::optional<google::protobuf::io::AnnotationCollector::Semantic> semantic) {
+    std::optional<google::protobuf::io::AnnotationCollector::Semantic> semantic) {
   auto field_name = FieldName(field);
 
   std::vector<io::Printer::Sub> vars;
@@ -2107,7 +2171,8 @@ std::vector<io::Printer::Sub> AnnotatedAccessors(
 }
 
 bool IsFileDescriptorProto(const FileDescriptor* file, const Options& options) {
-  if (Namespace(file) != absl::StrCat("::", ProtobufNamespace(options))) {
+  if (Namespace(file, options) !=
+      absl::StrCat("::", ProtobufNamespace(options))) {
     return false;
   }
   for (int i = 0; i < file->message_type_count(); ++i) {
