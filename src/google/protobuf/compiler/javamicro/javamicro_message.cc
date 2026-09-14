@@ -426,34 +426,38 @@ void MessageGenerator::GenerateIsInitialized(io::Printer* printer) {
     const FieldDescriptor* field = descriptor_->field(i);
     if (field->cpp_type() == FieldDescriptor::CPPTYPE_MESSAGE &&
         HasRequiredFields(field->message_type())) {
-      if (field->is_repeated()) {
-        if (params_.java_use_vector()) {
+      switch (field->label()) {
+        case FieldDescriptor::LABEL_REQUIRED:
           printer->Print(
-            "for (int i = 0; i < get$name$List().size(); i++) {\n"
-            "  if (get$name$(i).isInitialized()) return false;\n"
+            "if (!get$name$().isInitialized()) return false;\n",
+            "type", ClassName(params_, field->message_type()),
+            "name", UnderscoresToCapitalizedCamelCase(field));
+          break;
+        case FieldDescriptor::LABEL_OPTIONAL:
+          printer->Print(
+            "if (has$name$()) {\n"
+            "  if (!get$name$().isInitialized()) return false;\n"
             "}\n",
             "type", ClassName(params_, field->message_type()),
             "name", UnderscoresToCapitalizedCamelCase(field));
-        } else {
-          printer->Print(
-            "for ($type$ element : get$name$List()) {\n"
-            "  if (!element.isInitialized()) return false;\n"
-            "}\n",
-            "type", ClassName(params_, field->message_type()),
-            "name", UnderscoresToCapitalizedCamelCase(field));
-        }
-      } else if (field->is_required()) {
-        printer->Print(
-          "if (!get$name$().isInitialized()) return false;\n",
-          "type", ClassName(params_, field->message_type()),
-          "name", UnderscoresToCapitalizedCamelCase(field));
-      } else {
-        printer->Print(
-          "if (has$name$()) {\n"
-          "  if (!get$name$().isInitialized()) return false;\n"
-          "}\n",
-          "type", ClassName(params_, field->message_type()),
-          "name", UnderscoresToCapitalizedCamelCase(field));
+          break;
+        case FieldDescriptor::LABEL_REPEATED:
+          if (params_.java_use_vector()) {
+            printer->Print(
+              "for (int i = 0; i < get$name$List().size(); i++) {\n"
+              "  if (get$name$(i).isInitialized()) return false;\n"
+              "}\n",
+              "type", ClassName(params_, field->message_type()),
+              "name", UnderscoresToCapitalizedCamelCase(field));
+          } else {
+            printer->Print(
+              "for ($type$ element : get$name$List()) {\n"
+              "  if (!element.isInitialized()) return false;\n"
+              "}\n",
+              "type", ClassName(params_, field->message_type()),
+              "name", UnderscoresToCapitalizedCamelCase(field));
+          }
+          break;
       }
     }
   }
