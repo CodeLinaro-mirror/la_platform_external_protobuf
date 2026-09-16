@@ -1425,6 +1425,7 @@ cc_test {
         "libprotobuf-testing",
     ],
     shared_libs: ["libprotobuf-cpp-full"],
+    data_libs: ["libprotobuf-cpp-full"],
 }
 
 cc_test {
@@ -1441,6 +1442,7 @@ cc_test {
         "libprotobuf-testing",
     ],
     shared_libs: ["libprotobuf-cpp-full"],
+    data_libs: ["libprotobuf-cpp-full"],
 }
 
 filegroup {
@@ -2030,6 +2032,7 @@ rust_test {
     team: "trendy_team_android_rust",
     defaults: ["libprotobuf_google_defaults"],
     rustlibs: ["libgoogletest_rust"],
+    data_libs: ["libprotobuf-cpp-full"],
 }
 
 rust_proc_macro {
