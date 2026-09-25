@@ -29,6 +29,7 @@ genrule {
     out: [
         // It is load-bearing that this is listed first - it will be the crate root
         "google/protobuf/generated.rs",
+
         "google/protobuf/any.c.pb.rs",
         "google/protobuf/any.pb.thunks.cc",
         "google/protobuf/api.c.pb.rs",
@@ -41,6 +42,8 @@ genrule {
         "google/protobuf/empty.pb.thunks.cc",
         "google/protobuf/field_mask.c.pb.rs",
         "google/protobuf/field_mask.pb.thunks.cc",
+        "google/protobuf/json_enumvalue_options.c.pb.rs",
+        "google/protobuf/json_enumvalue_options.pb.thunks.cc",
         "google/protobuf/source_context.c.pb.rs",
         "google/protobuf/source_context.pb.thunks.cc",
         "google/protobuf/struct.c.pb.rs",
