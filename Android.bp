@@ -777,6 +777,7 @@ java_defaults {
     errorprone: {
         javacflags: [
             "-Xep:IgnoredPureGetter:WARN",
+            "-Xep:LabelledBreakTarget:WARN",
             "-Xep:MissingOverride:OFF", // b/73499927
         ],
     },
@@ -1694,6 +1695,7 @@ java_test {
     ],
     errorprone: {
         javacflags: [
+            "-Xep:ImpossibleNullComparison:WARN",
             "-Xep:RedundantSetterCall:WARN",
         ],
     },
@@ -1755,6 +1757,7 @@ java_test_host {
     ],
     errorprone: {
         javacflags: [
+            "-Xep:ImpossibleNullComparison:WARN",
             "-Xep:RedundantSetterCall:WARN",
         ],
     },
