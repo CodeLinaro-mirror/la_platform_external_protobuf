@@ -1126,7 +1126,13 @@ genrule {
 filegroup {
     name: "libprotobuf-internal-python-srcs",
     srcs: ["python/google/**/*.py"],
-    exclude_srcs: ["python/google/**/*_test.py"],
+    exclude_srcs: [
+        "python/google/**/*_benchmark.py",
+        "python/google/**/*_test.py",
+        // Test-only helpers, built into libprotobuf-python-test instead.
+        "python/google/protobuf/internal/import_test_package/__init__.py",
+        "python/google/protobuf/internal/test_util.py",
+    ],
     path: "python",
 }
 
@@ -1878,6 +1884,14 @@ filegroup {
     srcs: [
         "python/google/protobuf/internal/*_test.py",
         "python/google/protobuf/internal/**/*.proto",
+        "python/google/protobuf/internal/import_test_package/__init__.py",
+        "python/google/protobuf/internal/test_util.py",
+    ],
+    exclude_srcs: [
+        // Need C++ extension modules and google3 test libraries that are
+        // not built in Android.
+        "python/google/protobuf/internal/proto_api_test.py",
+        "python/google/protobuf/internal/recursive_message_pybind11_test.py",
     ],
     path: "python",
 }
