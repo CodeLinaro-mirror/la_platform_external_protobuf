@@ -66,7 +66,20 @@ cc_library_static {
     min_sdk_version: "apex_inherit",
     static_libs: ["libprotobuf_cpp_api"],
     shared_libs: ["libprotobuf-cpp-full"],
-    srcs: [":protobuf-rust-well-known-gen"],
+    srcs: [
+        ":protobuf-rust-well-known-gen{google/protobuf/any.pb.thunks.cc}",
+        ":protobuf-rust-well-known-gen{google/protobuf/api.pb.thunks.cc}",
+        ":protobuf-rust-well-known-gen{google/protobuf/descriptor.pb.thunks.cc}",
+        ":protobuf-rust-well-known-gen{google/protobuf/duration.pb.thunks.cc}",
+        ":protobuf-rust-well-known-gen{google/protobuf/empty.pb.thunks.cc}",
+        ":protobuf-rust-well-known-gen{google/protobuf/field_mask.pb.thunks.cc}",
+        ":protobuf-rust-well-known-gen{google/protobuf/json_enumvalue_options.pb.thunks.cc}",
+        ":protobuf-rust-well-known-gen{google/protobuf/source_context.pb.thunks.cc}",
+        ":protobuf-rust-well-known-gen{google/protobuf/struct.pb.thunks.cc}",
+        ":protobuf-rust-well-known-gen{google/protobuf/timestamp.pb.thunks.cc}",
+        ":protobuf-rust-well-known-gen{google/protobuf/type.pb.thunks.cc}",
+        ":protobuf-rust-well-known-gen{google/protobuf/wrappers.pb.thunks.cc}",
+    ],
     host_supported: true,
 }
 

@@ -57,7 +57,8 @@ cc_library_static {
     ],
     shared_libs: ["libprotobuf-cpp-full"],
     srcs: [
-        ":protobuf-rust-example-gen",
+        ":protobuf-rust-example-gen{proto_example/foo.pb.thunks.cc}",
+        ":protobuf-rust-example-gen{proto_example/bar/bar.pb.thunks.cc}",
     ],
     host_supported: true,
 }
