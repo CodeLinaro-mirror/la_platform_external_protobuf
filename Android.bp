@@ -740,6 +740,10 @@ cc_binary_host {
     ],
 
     rtti: true,
+
+    dist: {
+        targets: ["dist_files"],
+    },
 }
 
 cc_binary_host {
